@@ -240,7 +240,7 @@
   - Build Receipt verification and audit trails
   - _Requirements: Immutable Receipts with hash + WORM_
 
-- [ ] A.26 Add Receipt API endpoints
+- [x] A.26 Add Receipt API endpoints
   - POST /v1/receipts - Create new Receipt
   - GET /v1/receipts/{receipt_id} - Get Receipt details
   - POST /v1/receipts/{receipt_id}/verify - Verify Receipt integrity
