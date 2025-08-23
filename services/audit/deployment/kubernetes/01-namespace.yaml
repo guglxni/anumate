@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: anumate-audit
+  labels:
+    name: anumate-audit
+    app.kubernetes.io/name: anumate-audit
+    app.kubernetes.io/part-of: anumate-platform

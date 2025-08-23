@@ -1,0 +1,62 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "A.27 Audit Service Dashboard",
+    "tags": [
+      "anumate",
+      "audit"
+    ],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{service=\"audit-service\"}[5m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{service=\"audit-service\"}[5m]))",
+            "legendFormat": "95th percentile"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Audit Events Created",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(audit_events_created_total[1h])",
+            "legendFormat": "Events/hour"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Database Connection Pool",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "db_connection_pool_active{service=\"audit-service\"}",
+            "legendFormat": "Active connections"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}

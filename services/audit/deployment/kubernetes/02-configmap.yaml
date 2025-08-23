@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: audit-service-config
+  namespace: anumate-audit
+data:
+  LOG_LEVEL: INFO
+  ENVIRONMENT: production
+  EXPORT_DIRECTORY: /app/exports
+  RETENTION_CHECK_INTERVAL: '3600'
+  MAX_EXPORT_SIZE_MB: '1000'
+  DEFAULT_RETENTION_DAYS: '2555'
