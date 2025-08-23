@@ -1,0 +1,61 @@
+{
+  "test_suite": "A.26 Receipt Service Integration",
+  "timestamp": "2025-08-23T20:32:43.898216+00:00",
+  "success": true,
+  "results": [
+    {
+      "test": "Service Health Check",
+      "success": true,
+      "details": "Service: Anumate Receipt Service, Version: 1.0.0, Status: operational",
+      "timestamp": "2025-08-23T20:32:43.759459+00:00"
+    },
+    {
+      "test": "API Documentation",
+      "success": true,
+      "details": "Swagger UI available at /docs",
+      "timestamp": "2025-08-23T20:32:43.760141+00:00"
+    },
+    {
+      "test": "OpenAPI Spec",
+      "success": true,
+      "details": "OpenAPI 3.0 specification available",
+      "timestamp": "2025-08-23T20:32:43.760578+00:00"
+    },
+    {
+      "test": "Create Receipt",
+      "success": true,
+      "details": "Receipt created: 0db020b5-4205-4fe3-8d81-6d5bbed8952d, Signature present: True",
+      "timestamp": "2025-08-23T20:32:43.792854+00:00"
+    },
+    {
+      "test": "Get Receipt",
+      "success": true,
+      "details": "Receipt retrieved: 0db020b5-4205-4fe3-8d81-6d5bbed8952d, Content hash: 9a1002d293253975...",
+      "timestamp": "2025-08-23T20:32:43.822070+00:00"
+    },
+    {
+      "test": "Verify Receipt",
+      "success": true,
+      "details": "Verification result: Valid: True, Content hash valid: True, Signature valid: True",
+      "timestamp": "2025-08-23T20:32:43.851667+00:00"
+    },
+    {
+      "test": "Get Audit Logs",
+      "success": true,
+      "details": "Retrieved 10 audit log entries",
+      "timestamp": "2025-08-23T20:32:43.876165+00:00"
+    },
+    {
+      "test": "Invalid Tenant ID",
+      "success": true,
+      "details": "Properly rejected invalid tenant ID (HTTP 400)",
+      "timestamp": "2025-08-23T20:32:43.876516+00:00"
+    },
+    {
+      "test": "Non-existent Receipt",
+      "success": true,
+      "details": "Properly returned 404 for non-existent receipt",
+      "timestamp": "2025-08-23T20:32:43.898178+00:00"
+    }
+  ]
+}

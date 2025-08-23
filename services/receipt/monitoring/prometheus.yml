@@ -1,0 +1,20 @@
+# Prometheus scraping configuration for Receipt Service
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "receipt_service_alerts.yml"
+
+scrape_configs:
+  - job_name: 'receipt-service'
+    static_configs:
+      - targets: ['localhost:8001']
+    metrics_path: /metrics
+    scrape_interval: 10s
+    
+  - job_name: 'receipt-service-health'
+    static_configs:
+      - targets: ['localhost:8001']
+    metrics_path: /
+    scrape_interval: 30s

@@ -1,0 +1,51 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Receipt Service - A.26",
+    "tags": [
+      "anumate",
+      "receipt-service"
+    ],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"receipt-service\"}[5m])",
+            "legendFormat": "Requests/sec"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Response Time P95",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"receipt-service\"}[5m]))",
+            "legendFormat": "P95 Latency"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Error Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"receipt-service\",status=~\"5..\"}[5m]) / rate(http_requests_total{job=\"receipt-service\"}[5m])",
+            "legendFormat": "Error Rate %"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}
