@@ -1,0 +1,128 @@
+{
+  "report_id": "6c4a8e8d-220e-4bad-972a-298df9a70c32",
+  "run_id": "eb7ded7c-0652-4236-9e82-77d33fad2d0b",
+  "plan_hash": "test_plan_hash_123",
+  "generated_at": "2025-08-21T20:00:15.046405Z",
+  "simulation_duration_ms": 0,
+  "overall_status": "FAIL",
+  "overall_risk_level": "low",
+  "execution_feasible": false,
+  "flow_results": [
+    {
+      "flow_id": "main_flow",
+      "flow_name": "Payment Flow",
+      "would_complete": false,
+      "total_execution_time_ms": 4050,
+      "step_results": [
+        {
+          "step_id": "step_2",
+          "step_name": "Send Notification",
+          "would_execute": false,
+          "execution_time_ms": 3000,
+          "connector_responses": [],
+          "validation_passed": false,
+          "validation_issues": [
+            "Connector 'email' not available",
+            "Unknown connector: email"
+          ],
+          "risk_level": "medium",
+          "risk_factors": [
+            "Medium-risk action: send_email"
+          ],
+          "dependency_issues": [],
+          "simulated_outputs": {
+            "message_id": "simulated_message_id"
+          }
+        },
+        {
+          "step_id": "critical_step",
+          "step_name": "Delete Production Data",
+          "would_execute": false,
+          "execution_time_ms": 1050,
+          "connector_responses": [
+            {
+              "connector_name": "postgresql",
+              "tool_name": "postgresql",
+              "action": "drop_table",
+              "success": false,
+              "response_data": {
+                "error": "Unsupported action: drop_table"
+              },
+              "response_time_ms": 50,
+              "simulated": true,
+              "simulation_notes": [
+                "Action drop_table not supported by postgresql"
+              ]
+            }
+          ],
+          "validation_passed": false,
+          "validation_issues": [
+            "Action 'drop_table' not supported by connector 'postgresql'",
+            "Tool 'postgresql' not in allowed tools list"
+          ],
+          "risk_level": "critical",
+          "risk_factors": [
+            "High-risk action: drop_table",
+            "High-risk tool: postgresql",
+            "Critical pattern 'prod' in parameters",
+            "Failed connector responses: 1",
+            "No retry policy for high-risk operation"
+          ],
+          "dependency_issues": [],
+          "simulated_outputs": {}
+        }
+      ],
+      "flow_issues": [],
+      "overall_risk_level": "critical",
+      "critical_path_steps": [
+        "step_2",
+        "critical_step"
+      ]
+    }
+  ],
+  "total_estimated_duration_ms": 4050,
+  "estimated_cost": null,
+  "critical_issues": [
+    "Tools used but not in allowed list: {'postgresql'}",
+    "Action 'drop_table' not supported by connector 'postgresql'",
+    "Tool 'postgresql' not in allowed tools list"
+  ],
+  "warnings": [
+    "Connector 'email' not available",
+    "Unknown connector: email"
+  ],
+  "recommendations": [
+    {
+      "type": "risk_mitigation",
+      "severity": "high",
+      "title": "High-Risk Steps Detected",
+      "description": "Found 1 high-risk steps that require attention",
+      "suggested_actions": [
+        "Review step configurations for high-risk operations",
+        "Consider adding approval requirements for critical steps",
+        "Implement additional error handling and rollback procedures"
+      ],
+      "affected_steps": [
+        "critical_step"
+      ],
+      "documentation_links": []
+    }
+  ],
+  "resource_requirements": {
+    "estimated_cpu_usage": "200m",
+    "estimated_memory_usage": "256Mi",
+    "estimated_network_calls": 1,
+    "estimated_duration_seconds": 4.05,
+    "concurrent_operations": 2
+  },
+  "security_issues": [
+    "Step critical_step uses non-allowed tool: postgresql"
+  ],
+  "policy_violations": [],
+  "performance_bottlenecks": [
+    "Step step_2 takes 3000ms (74.1% of flow time)"
+  ],
+  "total_steps": 2,
+  "steps_with_issues": 2,
+  "high_risk_steps": 1
+}

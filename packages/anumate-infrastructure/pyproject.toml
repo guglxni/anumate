@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "anumate-infrastructure"
+version = "0.1.0"
+description = "Anumate infrastructure utilities for PostgreSQL RLS, Redis, NATS, and Vault"
+authors = [
+    {name = "Anumate Team", email = "dev@anumate.com"},
+]
+dependencies = [
+    "asyncpg>=0.29.0",
+    "redis>=5.0.0",
+    "nats-py>=2.6.0",
+    "hvac>=2.1.0",
+    "pydantic>=2.5.0",
+    "structlog>=23.2.0",
+    "tenacity>=8.2.0",
+    "fastapi>=0.104.0",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.12.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.7.0",
+    "ruff>=0.1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["anumate_infrastructure"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "EM", "EXE", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SIM", "TID", "TCH", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "NPY", "RUF"]
+ignore = ["S101", "S104", "PLR0913", "PLR0912", "PLR0915"]

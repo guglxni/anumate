@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with multi-tenant RLS setup
+  postgres:
+    image: postgres:15-alpine
+    container_name: anumate-postgres
+    environment:
+      POSTGRES_DB: anumate
+      POSTGRES_USER: anumate_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+      - ./postgres/config/postgresql.conf:/etc/postgresql/postgresql.conf
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    networks:
+      - anumate-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anumate_admin -d anumate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: anumate-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis/config/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - anumate-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NATS for event bus with CloudEvents
+  nats:
+    image: nats:2.10-alpine
+    container_name: anumate-nats
+    ports:
+      - "4222:4222"  # Client connections
+      - "8222:8222"  # HTTP monitoring
+      - "6222:6222"  # Routing port for clustering
+    volumes:
+      - ./nats/config/nats.conf:/etc/nats/nats.conf
+      - nats_data:/data
+    command: ["-c", "/etc/nats/nats.conf"]
+    networks:
+      - anumate-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # HashiCorp Vault for secrets management
+  vault:
+    image: hashicorp/vault:1.15
+    container_name: anumate-vault
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_ROOT_TOKEN:-dev-root-token}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_ADDR: http://0.0.0.0:8200
+    volumes:
+      - vault_data:/vault/data
+      - ./vault/config:/vault/config
+      - ./vault/policies:/vault/policies
+    cap_add:
+      - IPC_LOCK
+    networks:
+      - anumate-network
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: vault server -config=/vault/config/vault.hcl
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  nats_data:
+    driver: local
+  vault_data:
+    driver: local
+
+networks:
+  anumate-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

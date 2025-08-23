@@ -1,0 +1,61 @@
+{
+  "report_id": "2119728e-7abd-46b0-be29-b7db01ebc474",
+  "run_id": "3f52cade-cdf1-4992-bee5-bfa41a12bbd9",
+  "plan_hash": "simple_plan_123",
+  "generated_at": "2025-08-21T20:00:18.701962Z",
+  "simulation_duration_ms": 0,
+  "overall_status": "FAIL",
+  "overall_risk_level": "low",
+  "execution_feasible": false,
+  "flow_results": [
+    {
+      "flow_id": "simple_flow",
+      "flow_name": "Simple Flow",
+      "would_complete": false,
+      "total_execution_time_ms": 100,
+      "step_results": [
+        {
+          "step_id": "simple_step",
+          "step_name": "Simple Operation",
+          "would_execute": false,
+          "execution_time_ms": 100,
+          "connector_responses": [],
+          "validation_passed": false,
+          "validation_issues": [
+            "Connector 'test' not available",
+            "Unknown connector: test"
+          ],
+          "risk_level": "low",
+          "risk_factors": [],
+          "dependency_issues": [],
+          "simulated_outputs": {}
+        }
+      ],
+      "flow_issues": [],
+      "overall_risk_level": "low",
+      "critical_path_steps": [
+        "simple_step"
+      ]
+    }
+  ],
+  "total_estimated_duration_ms": 100,
+  "estimated_cost": null,
+  "critical_issues": [],
+  "warnings": [],
+  "recommendations": [],
+  "resource_requirements": {
+    "estimated_cpu_usage": "100m",
+    "estimated_memory_usage": "128Mi",
+    "estimated_network_calls": 0,
+    "estimated_duration_seconds": 0.1,
+    "concurrent_operations": 1
+  },
+  "security_issues": [],
+  "policy_violations": [],
+  "performance_bottlenecks": [
+    "Step simple_step takes 100ms (100.0% of flow time)"
+  ],
+  "total_steps": 1,
+  "steps_with_issues": 1,
+  "high_risk_steps": 0
+}

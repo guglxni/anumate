@@ -1,0 +1,30 @@
+# Capability Tokens Service Dependencies
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Database
+sqlalchemy[asyncio]>=2.0.0
+asyncpg>=0.28.0
+alembic>=1.12.0
+
+# Cryptography & JWT
+cryptography>=41.0.0
+PyJWT>=2.8.0
+
+# Anumate Packages  
+-e ../packages/anumate-crypto
+-e ../packages/anumate-capability-tokens
+-e ../packages/anumate-logging
+-e ../packages/anumate-errors
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+httpx>=0.24.0
+
+# Development
+black>=23.0.0
+isort>=5.12.0
+mypy>=1.5.0

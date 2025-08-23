@@ -1,0 +1,63 @@
+{
+  "report_id": "a78f3711-3b83-4e5c-8b74-5542aa5fcc4f",
+  "run_id": "4323e785-6e1c-4435-b544-42d48ba1ddb6",
+  "plan_hash": "slo_test_5938a718",
+  "generated_at": "2025-08-21T20:00:02.617540Z",
+  "simulation_duration_ms": 0,
+  "overall_status": "FAIL",
+  "overall_risk_level": "low",
+  "execution_feasible": false,
+  "flow_results": [
+    {
+      "flow_id": "simple_flow",
+      "flow_name": "Simple Status Check",
+      "would_complete": false,
+      "total_execution_time_ms": 1000,
+      "step_results": [
+        {
+          "step_id": "simple_step",
+          "step_name": "Simple API Call",
+          "would_execute": false,
+          "execution_time_ms": 1000,
+          "connector_responses": [],
+          "validation_passed": false,
+          "validation_issues": [
+            "Connector 'api' not available",
+            "Unknown connector: api"
+          ],
+          "risk_level": "low",
+          "risk_factors": [],
+          "dependency_issues": [],
+          "simulated_outputs": {
+            "status": "simulated_status"
+          }
+        }
+      ],
+      "flow_issues": [],
+      "overall_risk_level": "low",
+      "critical_path_steps": [
+        "simple_step"
+      ]
+    }
+  ],
+  "total_estimated_duration_ms": 1000,
+  "estimated_cost": null,
+  "critical_issues": [],
+  "warnings": [],
+  "recommendations": [],
+  "resource_requirements": {
+    "estimated_cpu_usage": "100m",
+    "estimated_memory_usage": "128Mi",
+    "estimated_network_calls": 0,
+    "estimated_duration_seconds": 1.0,
+    "concurrent_operations": 1
+  },
+  "security_issues": [],
+  "policy_violations": [],
+  "performance_bottlenecks": [
+    "Step simple_step takes 1000ms (100.0% of flow time)"
+  ],
+  "total_steps": 1,
+  "steps_with_issues": 1,
+  "high_risk_steps": 0
+}

@@ -1,0 +1,68 @@
+{
+  "report_id": "33513108-0d72-40a5-9ee3-8d6e28dc63d8",
+  "run_id": "039ed87c-f71a-409b-9d0e-e85ccf0f50dd",
+  "plan_hash": "test_plan_hash_123",
+  "generated_at": "2025-08-21T20:00:14.401892Z",
+  "simulation_duration_ms": 0,
+  "overall_status": "FAIL",
+  "overall_risk_level": "medium",
+  "execution_feasible": false,
+  "flow_results": [
+    {
+      "flow_id": "main_flow",
+      "flow_name": "Payment Flow",
+      "would_complete": false,
+      "total_execution_time_ms": 3000,
+      "step_results": [
+        {
+          "step_id": "step_2",
+          "step_name": "Send Notification",
+          "would_execute": false,
+          "execution_time_ms": 3000,
+          "connector_responses": [],
+          "validation_passed": false,
+          "validation_issues": [
+            "Connector 'email' not available",
+            "Unknown connector: email"
+          ],
+          "risk_level": "medium",
+          "risk_factors": [
+            "Medium-risk action: send_email"
+          ],
+          "dependency_issues": [],
+          "simulated_outputs": {
+            "message_id": "simulated_message_id"
+          }
+        }
+      ],
+      "flow_issues": [],
+      "overall_risk_level": "medium",
+      "critical_path_steps": [
+        "step_2"
+      ]
+    }
+  ],
+  "total_estimated_duration_ms": 3000,
+  "estimated_cost": null,
+  "critical_issues": [],
+  "warnings": [
+    "Connector 'email' not available",
+    "Unknown connector: email"
+  ],
+  "recommendations": [],
+  "resource_requirements": {
+    "estimated_cpu_usage": "100m",
+    "estimated_memory_usage": "128Mi",
+    "estimated_network_calls": 0,
+    "estimated_duration_seconds": 3.0,
+    "concurrent_operations": 1
+  },
+  "security_issues": [],
+  "policy_violations": [],
+  "performance_bottlenecks": [
+    "Step step_2 takes 3000ms (100.0% of flow time)"
+  ],
+  "total_steps": 1,
+  "steps_with_issues": 1,
+  "high_risk_steps": 0
+}
