@@ -1,0 +1,143 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anumate-integration-service"
+version = "0.1.0"
+description = "Production-grade service integration patterns for Anumate platform"
+authors = [{name = "Anumate", email = "info@anumate.com"}]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    # Core Framework
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    
+    # Service Integration
+    "httpx>=0.25.0",
+    "aioredis>=2.0.0",
+    "consul-python>=1.1.0",
+    "circuit-breaker>=1.0.0",
+    
+    # Load Balancing & Routing
+    "yarl>=1.9.0",
+    "aiohttp>=3.9.0",
+    "python-multipart>=0.0.6",
+    
+    # Monitoring & Observability
+    "prometheus-client>=0.19.0",
+    "opentelemetry-api>=1.21.0",
+    "opentelemetry-sdk>=1.21.0",
+    "opentelemetry-instrumentation-fastapi>=0.42b0",
+    "opentelemetry-instrumentation-httpx>=0.42b0",
+    "opentelemetry-instrumentation-redis>=0.42b0",
+    "opentelemetry-exporter-prometheus>=1.12.0",
+    "opentelemetry-exporter-jaeger>=1.21.0",
+    
+    # Security & Authentication
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.6",
+    
+    # Configuration & Validation
+    "python-dotenv>=1.0.0",
+    "structlog>=23.2.0",
+    "tenacity>=8.2.0",
+    
+    # Development Tools
+    "rich>=13.0.0",
+    "typer>=0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.25.0",
+    "respx>=0.20.0",
+    "fakeredis>=2.20.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.7.0",
+    "pre-commit>=3.5.0",
+]
+
+[project.scripts]
+anumate-integration = "anumate_integration_service.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = [
+    "consul.*",
+    "circuit_breaker.*",
+    "prometheus_client.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = [
+    "--cov=src/anumate_integration_service",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-fail-under=90",
+    "-v"
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning"
+]

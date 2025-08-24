@@ -1,0 +1,69 @@
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+pythonpath = ["src", "packages"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+    "--disable-warnings",
+    "--color=yes"
+]
+
+markers = [
+    "e2e: End-to-end integration tests",
+    "golden_path: Golden path flow tests",
+    "performance: Performance and SLO validation tests", 
+    "integration: Service integration tests",
+    "slow: Tests that run longer than 10 seconds",
+    "mock: Tests using mock connectors",
+    "unit: Unit tests (fast, isolated)",
+    "smoke: Smoke tests for basic functionality"
+]
+
+# Test discovery
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Timeout configuration
+timeout = 300
+timeout_method = "thread"
+
+# Async test configuration
+asyncio_mode = "auto"
+
+# Logging configuration
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(name)s: %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["src/"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+    "*/venv/*",
+    "*/env/*"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod"
+]
+
+[tool.coverage.html]
+directory = "tests/results/coverage_html"

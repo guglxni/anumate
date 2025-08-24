@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  # Integration Service
+  integration-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: anumate/integration-service:latest
+    container_name: anumate-integration-service
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=info
+      - GATEWAY_ENABLED=true
+      - HEALTH_MANAGER_ENABLED=true
+    ports:
+      - "8090:8090"  # Integration service API
+      - "8080:8080"  # API Gateway
+    depends_on:
+      - redis
+    networks:
+      - anumate-network
+    volumes:
+      - integration-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis for service registry
+  redis:
+    image: redis:7-alpine
+    container_name: anumate-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    networks:
+      - anumate-network
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: anumate-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    networks:
+      - anumate-network
+    volumes:
+      - ./deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  # Grafana for monitoring dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: anumate-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=redis-datasource
+    ports:
+      - "3000:3000"
+    networks:
+      - anumate-network
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./deployment/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./deployment/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: anumate-jaeger
+    restart: unless-stopped
+    environment:
+      - COLLECTOR_ZIPKIN_HTTP_PORT=9411
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Jaeger collector HTTP
+    networks:
+      - anumate-network
+
+networks:
+  anumate-network:
+    name: anumate-network
+    driver: bridge
+
+volumes:
+  redis-data:
+    name: anumate-redis-data
+  prometheus-data:
+    name: anumate-prometheus-data
+  grafana-data:
+    name: anumate-grafana-data
+  integration-logs:
+    name: anumate-integration-logs

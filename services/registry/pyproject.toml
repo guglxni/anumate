@@ -38,7 +38,7 @@ dependencies = [
 packages = ["src"]
 
 [project.scripts]
-registry = "services.registry.main:main"
+registry-server = "services.registry.main:app"
 
 [project.optional-dependencies]
 dev = [
