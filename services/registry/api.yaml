@@ -1,0 +1,773 @@
+openapi: 3.1.0
+info:
+  title: Capsule Registry Service
+  version: 1.0.0
+  description: |
+    A.4–A.6 Implementation: Production-grade capsule registry for storing, versioning,
+    and validating execution capsules with WORM storage and cryptographic integrity.
+  contact:
+    name: Anumate Platform Team
+  license:
+    name: MIT
+servers:
+  - url: /v1
+    description: API v1
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OIDC Bearer token
+
+  parameters:
+    TenantHeader:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Tenant identifier
+    
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+      description: Unique key for idempotent operations
+
+  schemas:
+    Error:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: RFC7807 problem type URI
+        title:
+          type: string
+          description: Human-readable summary
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+          description: HTTP status code
+        detail:
+          type: string
+          description: Human-readable explanation
+        instance:
+          type: string
+          format: uri
+          description: URI reference to specific occurrence
+        tenant_id:
+          type: string
+          format: uuid
+        trace_id:
+          type: string
+
+    CapsuleStatus:
+      type: string
+      enum: [draft, active, deleted]
+      description: Capsule lifecycle status
+
+    CapsuleVisibility:
+      type: string
+      enum: [private, internal, public]
+      description: Access visibility level
+
+    CapsuleMetadata:
+      type: object
+      required: [id, name, owner, status, visibility, latest_version, etag]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique capsule identifier
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$'
+          description: Capsule name (DNS-safe)
+        owner:
+          type: string
+          description: Owner subject identifier
+        status:
+          $ref: '#/components/schemas/CapsuleStatus'
+        visibility:
+          $ref: '#/components/schemas/CapsuleVisibility'
+        description:
+          type: string
+          maxLength: 2048
+          description: Optional description
+        tags:
+          type: array
+          items:
+            type: string
+            pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'
+          maxItems: 20
+          description: Searchable tags
+        latest_version:
+          type: integer
+          minimum: 0
+          description: Latest published version number
+        etag:
+          type: string
+          description: Entity tag for concurrency control
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp (RFC3339)
+        updated_at:
+          type: string
+          format: date-time
+          description: Last modification timestamp (RFC3339)
+
+    CapsuleCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$'
+        description:
+          type: string
+          maxLength: 2048
+        tags:
+          type: array
+          items:
+            type: string
+            pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'
+          maxItems: 20
+        visibility:
+          $ref: '#/components/schemas/CapsuleVisibility'
+          default: private
+
+    CapsuleVersion:
+      type: object
+      required: [id, capsule_id, version, content_hash, signature, pubkey_id, uri]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Version identifier
+        capsule_id:
+          type: string
+          format: uuid
+          description: Parent capsule identifier
+        version:
+          type: integer
+          minimum: 1
+          description: Sequential version number
+        content_hash:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: SHA256 hash of canonical content
+        signature:
+          type: string
+          description: Ed25519 signature (hex-encoded)
+        pubkey_id:
+          type: string
+          description: Public key identifier
+        uri:
+          type: string
+          format: uri
+          description: WORM storage URI
+        created_by:
+          type: string
+          description: Creator subject identifier
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+
+    CapsuleVersionRequest:
+      type: object
+      required: [yaml_content]
+      properties:
+        yaml_content:
+          type: string
+          description: Complete capsule YAML definition
+        lint_only:
+          type: boolean
+          default: false
+          description: Validate only, don't store
+
+    ValidationResult:
+      type: object
+      required: [valid, content_hash]
+      properties:
+        valid:
+          type: boolean
+          description: Whether validation passed
+        content_hash:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: Computed content hash
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+              message:
+                type: string
+          description: Validation errors (if any)
+        warnings:
+          type: array
+          items:
+            type: string
+          description: Non-fatal warnings
+
+    CapsuleList:
+      type: object
+      required: [capsules, pagination]
+      properties:
+        capsules:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapsuleMetadata'
+        pagination:
+          type: object
+          required: [page, page_size, total_count, total_pages]
+          properties:
+            page:
+              type: integer
+              minimum: 1
+            page_size:
+              type: integer
+              minimum: 1
+              maximum: 100
+            total_count:
+              type: integer
+              minimum: 0
+            total_pages:
+              type: integer
+              minimum: 0
+
+    HealthCheck:
+      type: object
+      required: [status, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        checks:
+          type: object
+          properties:
+            database:
+              type: string
+              enum: [ok, error]
+            storage:
+              type: string
+              enum: [ok, error]
+
+security:
+  - BearerAuth: []
+
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      description: Basic health status
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheck'
+
+  /readyz:
+    get:
+      summary: Readiness check
+      description: Service readiness with dependency checks
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheck'
+        '503':
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: Service metrics in Prometheus format
+      security: []
+      responses:
+        '200':
+          description: Metrics data
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /capsules:
+    get:
+      summary: List capsules
+      description: Retrieve capsules with filtering and pagination
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 255
+          description: Search query (name, description, tags)
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/CapsuleStatus'
+          description: Filter by status
+        - name: tool
+          in: query
+          schema:
+            type: string
+          description: Filter by tool reference
+        - name: updated_since
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter by update time (RFC3339)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Items per page
+      responses:
+        '200':
+          description: Capsule list retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapsuleList'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Create capsule
+      description: Create new capsule metadata (initial draft)
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CapsuleCreateRequest'
+      responses:
+        '201':
+          description: Capsule created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapsuleMetadata'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Capsule name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /capsules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Capsule identifier
+      - $ref: '#/components/parameters/TenantHeader'
+
+    get:
+      summary: Get capsule metadata
+      description: Retrieve capsule metadata with latest version info
+      responses:
+        '200':
+          description: Capsule metadata retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapsuleMetadata'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Capsule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      summary: Update capsule status
+      description: Soft delete/restore capsule (status change only)
+      parameters:
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Expected ETag value for concurrency control
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  $ref: '#/components/schemas/CapsuleStatus'
+      responses:
+        '200':
+          description: Capsule updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapsuleMetadata'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Capsule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '412':
+          description: ETag precondition failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Delete capsule
+      description: Hard delete capsule (admin only)
+      parameters:
+        - name: hard
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+          description: Confirm hard delete operation
+      responses:
+        '204':
+          description: Capsule deleted successfully
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Insufficient permissions (admin required)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Capsule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /capsules/{id}/versions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Capsule identifier
+      - $ref: '#/components/parameters/TenantHeader'
+
+    get:
+      summary: List capsule versions
+      description: Retrieve all versions for a capsule
+      responses:
+        '200':
+          description: Version list retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [versions]
+                properties:
+                  versions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CapsuleVersion'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Capsule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Publish new version
+      description: Create and publish a new capsule version
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CapsuleVersionRequest'
+      responses:
+        '201':
+          description: Version published successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapsuleVersion'
+        '400':
+          description: Invalid request data or validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Capsule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Version content already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /capsules/{id}/versions/{version}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Capsule identifier
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: Version number
+      - $ref: '#/components/parameters/TenantHeader'
+
+    get:
+      summary: Get version content
+      description: Retrieve YAML blob and metadata for specific version
+      responses:
+        '200':
+          description: Version content retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, yaml_content]
+                properties:
+                  version:
+                    $ref: '#/components/schemas/CapsuleVersion'
+                  yaml_content:
+                    type: string
+                    description: Complete capsule YAML (sensitive data masked)
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Capsule or version not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /capsules/{id}/lint:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Capsule identifier
+      - $ref: '#/components/parameters/TenantHeader'
+
+    post:
+      summary: Validate capsule content
+      description: Validate YAML content without publishing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [yaml_content]
+              properties:
+                yaml_content:
+                  type: string
+                  description: Capsule YAML to validate
+      responses:
+        '200':
+          description: Validation completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Capsule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

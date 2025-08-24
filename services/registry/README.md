@@ -1,19 +1,38 @@
-# Anumate Capsule Registry Service
+# Capsule Registry Service
 
-The Capsule Registry is a core service in the Anumate platform that manages automation definitions called "Capsules". It provides versioned storage, validation, signing, and integrity verification for YAML-based automation workflows.
+Production-grade registry for capsule definitions with WORM storage, multi-tenant support, and comprehensive security.
+
+## Overview
+
+The Capsule Registry implements the A.4–A.6 Platform Specification, providing:
+
+- **Multi-tenant Architecture**: Complete tenant isolation with RBAC
+- **WORM Storage**: Immutable content storage with cryptographic verification  
+- **OIDC Authentication**: Integration with OpenID Connect providers
+- **Event Publishing**: CloudEvents for capsule lifecycle notifications
+- **Comprehensive API**: RESTful endpoints with OpenAPI 3.1 specification
+- **Production Ready**: Observability, health checks, and deployment configuration
 
 ## Features
 
-### ✅ Implemented (Task A.4)
+### Core Functionality
+- Capsule creation and management
+- Versioned content storage
+- YAML validation and linting
+- Content signing with Ed25519
+- Audit logging
 
-- **Capsule Model with Versioning**: Complete data model supporting semantic versioning
-- **YAML Storage**: Native YAML parsing and serialization with validation
-- **CRUD Operations**: Full lifecycle management (Create, Read, Update, Delete)
-- **Schema Validation**: Multi-layer validation (YAML syntax, JSON schema, Pydantic models, business rules)
-- **Digital Signatures**: Ed25519-based signing and verification for integrity
-- **Checksum Verification**: SHA-256 checksums for tamper detection
-- **Multi-tenant Support**: Row-level security with tenant isolation
-- **Comprehensive Testing**: 46 test cases covering all functionality
+### Security
+- Bearer token authentication
+- Role-based access control (viewer/editor/admin)
+- Tenant isolation with PostgreSQL RLS
+- Content integrity verification
+
+### Observability
+- Structured logging with anumate-logging
+- Distributed tracing support
+- Prometheus metrics
+- Health and readiness endpoints
 
 ## Architecture
 
