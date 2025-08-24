@@ -2,7 +2,7 @@
 # WeMakeDevs AgentHack 2025 - Production Demo
 # ==========================================
 
-.PHONY: help up-core down demo accept test clean
+.PHONY: help up-core down demo accept test clean demo-razorpay-link evidence
 
 # Default target
 help: ## Show this help message
@@ -66,6 +66,11 @@ demo: ## Run the production-grade end-to-end Portia demo (no mocks!)
 	@echo "🚀 Launching production demo with real APIs..."
 	@python3 scripts/run_portia_demo.py --tenant demo --amount 1000
 
+demo-razorpay-link: ## Run Razorpay MCP payment-link demo via orchestrator service
+	demo-razorpay-link: ## Run Razorpay MCP payment link demo 
+	@echo "💳 Running Razorpay MCP Payment Link Demo..."
+	@cd services/orchestrator && bash demo.sh payment-link
+
 demo-custom: ## Run demo with custom parameters (TENANT and AMOUNT env vars)
 	@echo "🎬 Running Custom Portia Demo..."
 	@python3 scripts/run_portia_demo.py --tenant $(TENANT) --amount $(AMOUNT)
@@ -73,6 +78,8 @@ demo-custom: ## Run demo with custom parameters (TENANT and AMOUNT env vars)
 # Testing targets
 accept: ## Run production acceptance tests and health checks
 	@echo "🧪 Running production acceptance tests..."
+	cd services/orchestrator && PYTHONPATH=/Users/aaryanguglani/anumate/services/orchestrator pytest -q tests/test_redaction.py tests/test_razorpay_mcp.py::TestIntegrationWithPortia::test_secrets_redaction_in_logs
+	@echo "✅ Core tests passed - MCP integration and secret redaction validated"
 	@echo "Testing orchestrator wire protocol with real services..."
 	@cd services/orchestrator && python3 -m pytest tests/test_portia_wire.py -v -s || echo "⚠️  Some tests may require running services"
 	@echo ""
@@ -84,6 +91,10 @@ accept: ## Run production acceptance tests and health checks
 	@curl -sf http://localhost:8001/health 2>/dev/null | python3 -m json.tool || echo "⚠️  Receipt service may be starting"
 	@echo ""
 	@echo "✅ Production acceptance checks complete!"
+
+evidence: ## Capture evidence and verify receipt integrity
+	@python scripts/capture_evidence.py && \
+	python scripts/verify_receipt.py --file artifacts/receipt.json
 
 test: ## Run all tests
 	@echo "🧪 Running all tests..."

@@ -1,26 +1,49 @@
 # 🎯 Judge Mode - WeMakeDevs AgentHack 2025
 
+## Environment Setup (placeholders only):
+```bash
+PORTIA_API_KEY=
+OPENAI_API_KEY=
+OPENAI_BASE_URL=https://api.moonshot.cn/v1
+ENABLE_RAZORPAY_MCP=true
+RAZORPAY_MCP_URL=https://mcp.razorpay.com/mcp
+RAZORPAY_MCP_AUTH=Bearer <base64(key_id:key_secret)>
+```
+
 ## Quick Demo Commands (Copy/Paste Ready)
 
-### 1. Service Readiness Check
+### 1. Readiness Check
 ```bash
 curl -s localhost:8090/readyz | jq .
 ```
-**Expected Output:**
-```json
-{
-  "ready": true,
-  "service": "orchestrator-api", 
-  "version": "0.1.0",
-  "services": {
-    "portia": "ready",
-    "openai": "ready",
-    "approvals_service": "configured"
-  }
-}
+
+### 2. Execute MCP Payment Link (₹10)
+```bash
+curl -sS -X POST http://localhost:8090/v1/execute/portia \
+  -H 'Content-Type: application/json' \
+  -H 'X-Tenant-ID: demo' \
+  -H "Idempotency-Key: key-$RANDOM" \
+  -d '{
+        "plan_hash":"demo-1",
+        "engine":"razorpay_mcp_payment_link",
+        "require_approval": false,
+        "razorpay": { "amount": 1000, "currency":"INR", "description":"Judge demo" }
+      }' | jq .
 ```
 
-### 2. Create Payment Link via Razorpay MCP (₹10.00)
+**Expected Response Fields:**
+- `status`: "SUCCEEDED"
+- `receipt_id`: Unique receipt identifier
+- `mcp.short_url`: Razorpay payment link  
+- `plan_run_id`: Execution tracking ID
+
+### 3. Verify Receipt
+```bash
+python scripts/verify_receipt.py --receipt-id <receipt_id>
+# Expected output: VERIFIED
+```
+
+### 4. Create Payment Link via Razorpay MCP (₹10.00)
 ```bash
 curl -sS -X POST http://localhost:8090/v1/execute/portia \
   -H 'Content-Type: application/json' \

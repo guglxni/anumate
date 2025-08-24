@@ -5,14 +5,54 @@ A comprehensive microservices platform for policy automation, capability managem
 
 ## 🏆 **JUDGE MODE - WeMakeDevs AgentHack 2025**
 
+### Environment Setup (placeholders only):
+```bash
+PORTIA_API_KEY=
+OPENAI_API_KEY=
+OPENAI_BASE_URL=https://api.moonshot.cn/v1
+ENABLE_RAZORPAY_MCP=true
+RAZORPAY_MCP_URL=https://mcp.razorpay.com/mcp
+RAZORPAY_MCP_AUTH=Bearer <base64(key_id:key_secret)>
+```
+
+### Readiness Check:
+```bash
+curl -s localhost:8090/readyz | jq .
+```
+
+### Execute MCP Payment Link (₹10):
+```bash
+curl -sS -X POST http://localhost:8090/v1/execute/portia \
+  -H 'Content-Type: application/json' \
+  -H 'X-Tenant-ID: demo' \
+  -H "Idempotency-Key: key-$RANDOM" \
+  -d '{
+        "plan_hash":"demo-1",
+        "engine":"razorpay_mcp_payment_link",
+        "require_approval": false,
+        "razorpay": { "amount": 1000, "currency":"INR", "description":"Judge demo" }
+      }' | jq .
+```
+
+**Expected Response Fields:**
+- `status`: "SUCCEEDED"  
+- `receipt_id`: Unique receipt identifier
+- `mcp.short_url`: Razorpay payment link
+- `plan_run_id`: Execution tracking ID
+
+### Verify Receipt:
+```bash
+python scripts/verify_receipt.py --receipt-id <receipt_id>
+# Expected output: VERIFIED
+```
+
 **Quick Start for Judges:**
 ```bash
 # 1. One-command setup and demo
 make judge
 
 # 2. Or manual Razorpay MCP demo
-cd services/orchestrator
-./demo.sh
+make demo-razorpay-link
 
 # 3. Test specific payment creation
 curl -sS -X POST http://localhost:8090/v1/execute/portia \
@@ -28,6 +68,7 @@ curl -sS -X POST http://localhost:8090/v1/execute/portia \
       "customer": {"name": "Judge", "email": "judge@wemakedevs.org"}
     }
   }' | jq .
+```
 ```
 
 **Expected Output:**
