@@ -283,3 +283,7 @@ services/*/.pytest_cache/
 services/*/__pycache__/
 services/*/venv/
 services/*/.venv/
+
+# Kiro and Gemini artifacts
+.kiro
+.gemini

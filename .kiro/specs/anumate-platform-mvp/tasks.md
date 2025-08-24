@@ -68,14 +68,14 @@
 
 ## A.2: Capsule Registry Service
 
-- [x] A.4 Implement Capsule Registry core functionality
+- [ ] A.4 Implement Capsule Registry core functionality
   - Create Capsule model with versioning and YAML storage
   - Implement CRUD operations for Capsule lifecycle
   - Add Capsule validation and schema enforcement
   - Build Capsule signing and integrity verification
   - _Requirements: Config-first architecture with versioned YAML_
 
-- [x] A.5 Add Capsule Registry API endpoints
+- [ ] A.5 Add Capsule Registry API endpoints
   - POST /v1/capsules - Create new Capsule
   - GET /v1/capsules - List Capsules with filtering
   - GET /v1/capsules/{id} - Get specific Capsule version
@@ -83,7 +83,7 @@
   - DELETE /v1/capsules/{id} - Soft delete Capsule
   - _Requirements: RESTful API for Capsule management_
 
-- [x] A.6 Implement Capsule Registry business logic
+- [ ] A.6 Implement Capsule Registry business logic
   - Add Capsule dependency resolution
   - Implement Capsule inheritance and composition
   - Create Capsule diff and change tracking
@@ -92,21 +92,21 @@
 
 ## A.3: Policy Service
 
-- [x] A.7 Create Policy DSL engine
+- [ ] A.7 Create Policy DSL engine
   - Design Policy DSL syntax for governance rules
   - Implement Policy parser and AST generation
   - Create Policy evaluation engine
   - Add Policy validation and testing framework
   - _Requirements: Policy DSL for governance and redaction_
 
-- [x] A.8 Implement Policy enforcement mechanisms
+- [ ] A.8 Implement Policy enforcement mechanisms
   - Create Policy middleware for API endpoints
   - Add data redaction based on Policy rules
   - Implement drift detection for Policy compliance
   - Build Policy violation reporting and alerting
   - _Requirements: Policy enforcement and compliance monitoring_
 
-- [x] A.9 Add Policy service API endpoints
+- [ ] A.9 Add Policy service API endpoints
   - POST /v1/policies - Create new Policy
   - GET /v1/policies - List Policies
   - GET /v1/policies/{id} - Get specific Policy
@@ -116,21 +116,21 @@
 
 ## A.4: Plan Compiler Service
 
-- [x] A.10 Implement Capsule to ExecutablePlan compilation
+- [ ] A.10 Implement Capsule to ExecutablePlan compilation
   - Create Plan Compiler that transforms Capsules to ExecutablePlans
   - Generate plan_hash for ExecutablePlan integrity
   - Implement dependency resolution and optimization
   - Add compilation validation and error reporting
   - _Requirements: Capsule → ExecutablePlan transformation_
 
-- [x] A.11 Add Plan Compiler API endpoints
+- [ ] A.11 Add Plan Compiler API endpoints
   - POST /v1/compile - Compile Capsule to ExecutablePlan
   - GET /v1/plans/{plan_hash} - Retrieve compiled ExecutablePlan
   - POST /v1/plans/{plan_hash}/validate - Validate ExecutablePlan
   - GET /v1/compile/status/{job_id} - Get compilation job status
   - _Requirements: Plan compilation API with async support_
 
-- [x] A.12 Implement Plan optimization and caching
+- [ ] A.12 Implement Plan optimization and caching
   - Add ExecutablePlan caching by plan_hash
   - Implement Plan optimization for performance
   - Create Plan dependency graph analysis
@@ -139,21 +139,21 @@
 
 ## A.5: GhostRun Simulator Service
 
-- [x] A.13 Create GhostRun dry-run simulation engine
+- [ ] A.13 Create GhostRun dry-run simulation engine
   - Implement ExecutablePlan simulation without side effects
   - Create mock connector responses for simulation
   - Generate Preflight reports with validation results
   - Add simulation performance metrics and timing
   - _Requirements: Preflight validation with dry-run simulation_
 
-- [x] A.14 Add GhostRun API endpoints
+- [ ] A.14 Add GhostRun API endpoints
   - POST /v1/ghostrun - Start GhostRun simulation
   - GET /v1/ghostrun/{run_id} - Get GhostRun status and results
   - GET /v1/ghostrun/{run_id}/report - Get Preflight report
   - POST /v1/ghostrun/{run_id}/cancel - Cancel running simulation
   - _Requirements: GhostRun simulation API_
 
-- [x] A.15 Implement Preflight report generation
+- [ ] A.15 Implement Preflight report generation
   - Create comprehensive Preflight validation reports
   - Add risk assessment and recommendation engine
   - Implement Preflight report storage and retrieval
@@ -162,14 +162,14 @@
 
 ## A.6: Orchestrator Service (Portia Integration)
 
-- [x] A.16 Implement Portia Runtime integration
+- [ ] A.16 Implement Portia Runtime integration
   - Create Portia Plans/PlanRuns from ExecutablePlans
   - Implement Clarifications bridge for approvals
   - Add execution hooks for capability token validation
   - Build retry logic and idempotency handling
   - _Requirements: Clean Portia integration with hooks_
 
-- [x] A.17 Add Orchestrator API endpoints
+- [ ] A.17 Add Orchestrator API endpoints
   - POST /v1/execute - Execute ExecutablePlan via Portia
   - GET /v1/executions/{run_id} - Get execution status
   - POST /v1/executions/{run_id}/pause - Pause execution
@@ -177,7 +177,7 @@
   - POST /v1/executions/{run_id}/cancel - Cancel execution
   - _Requirements: Execution orchestration API_
 
-- [x] A.18 Implement execution monitoring and hooks
+- [ ] A.18 Implement execution monitoring and hooks
   - Add pre-execution capability token validation
   - Implement execution progress tracking
   - Create execution.completed CloudEvent emission
@@ -186,14 +186,14 @@
 
 ## A.7: Approvals Service
 
-- [x] A.19 Create Clarifications bridge for approvals
+- [ ] A.19 Create Clarifications bridge for approvals
   - Implement Portia Clarifications integration
   - Create approval request generation from Plans
   - Add approver notification system (email/Slack)
   - Build approval UI for decision making
   - _Requirements: Approval propagation < 2s SLO_
 
-- [x] A.20 Add Approvals API endpoints
+- [ ] A.20 Add Approvals API endpoints
   - GET /v1/approvals - List pending approvals
   - GET /v1/approvals/{approval_id} - Get approval details
   - POST /v1/approvals/{approval_id}/approve - Approve request
@@ -201,7 +201,7 @@
   - POST /v1/approvals/{approval_id}/delegate - Delegate approval
   - _Requirements: Approval management API_
 
-- [x] A.21 Implement approval workflow engine
+- [ ] A.21 Implement approval workflow engine
   - Create multi-step approval workflows
   - Add approval escalation and timeout handling
   - Implement approval audit trail
@@ -210,21 +210,21 @@
 
 ## A.8: Capability Tokens Service
 
-- [x] A.22 Implement Ed25519/JWT capability tokens
+- [ ] A.22 Implement Ed25519/JWT capability tokens
   - Create short-lived capability tokens (≤5m expiry)
   - Implement Ed25519 signing for token integrity
   - Add capability-based access control
   - Build token verification service
   - _Requirements: Short-lived capability tokens for security_
 
-- [x] A.23 Add CapTokens API endpoints
+- [ ] A.23 Add CapTokens API endpoints
   - POST /v1/captokens - Issue new capability token
   - POST /v1/captokens/verify - Verify token and capabilities
   - POST /v1/captokens/refresh - Refresh token before expiry
   - GET /v1/captokens/audit - Get token usage audit trail
   - _Requirements: Capability token management API_
 
-- [x] A.24 Implement capability enforcement
+- [ ] A.24 Implement capability enforcement
   - Add capability checking middleware
   - Implement tool allow-lists from Capsules
   - Create capability violation logging
@@ -233,20 +233,19 @@
 
 ## A.9: Receipt & Audit Service
 
-- [x] A.25 Create tamper-evident receipt system
+- [ ] A.25 Create tamper-evident receipt system
   - Implement immutable Receipt generation with hashing
   - Add digital signatures for Receipt integrity
   - Create WORM storage integration for compliance
   - Build Receipt verification and audit trails
   - _Requirements: Immutable Receipts with hash + WORM_
 
-- [x] A.26 Add Receipt API endpoints
+- [ ] A.26 Add Receipt API endpoints
   - POST /v1/receipts - Create new Receipt
   - GET /v1/receipts/{receipt_id} - Get Receipt details
   - POST /v1/receipts/{receipt_id}/verify - Verify Receipt integrity
   - GET /v1/receipts/audit - Export audit logs to SIEM
   - _Requirements: Receipt management and audit API_
-  - _Status: COMPLETE - All endpoints implemented, integration tested (100% pass rate), production deployment ready_
 
 - [ ] A.27 Implement comprehensive audit logging
   - Create audit event capture for all operations
@@ -277,6 +276,7 @@
   - Add performance testing for SLO validation
   - Build integration test automation
   - _Requirements: Golden path E2E with mock connectors_
+  - _Status: TODO - Need to implement after core services are built_
 
 ---
 
