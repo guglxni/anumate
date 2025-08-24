@@ -20,7 +20,7 @@ from .models import (
     PortiaPlanRun,
     ExecutionStatusModel,
 )
-from .portia_client import PortiaClient
+from .portia_sdk_client import PortiaSDKClient
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +196,7 @@ class ExecutionMonitor:
             while True:
                 try:
                     # Get current execution status
-                    async with PortiaClient() as portia_client:
+                    async with PortiaSDKClient() as portia_client:
                         portia_run = await portia_client.get_run(run_id)
                     
                     if not portia_run:

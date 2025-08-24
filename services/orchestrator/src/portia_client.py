@@ -1,456 +1,167 @@
-"""Portia Runtime client for plan execution."""
-
+"""
+Portia SDK Client - SDK-only implementation with MCP integration
+Integrates with Moonshot Kimi API as OpenAI-compatible backend and Razorpay MCP
+"""
+import os
 import asyncio
-import json
 import logging
-from typing import Any, Dict, List, Optional
-from uuid import uuid4
+from typing import Dict, Any, Optional
+from dotenv import load_dotenv
+from .settings import Settings
+from .portia_mcp import build_mcp_registry
 
-import httpx
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-)
+# Load environment variables
+load_dotenv()
 
 try:
-    from anumate_core_config import settings
-except ImportError:
-    # Fallback settings for development
-    class MockSettings:
-        PORTIA_BASE_URL = "http://localhost:8080"
-        PORTIA_API_KEY = "mock-api-key"
-    settings = MockSettings()
-try:
-    from anumate_errors import AnumateError
-except ImportError:
-    # Fallback error class for development
-    class AnumateError(Exception):
-        pass
-# Tracing removed for development compatibility
-def trace_async(name):
-    """Mock trace_async decorator for development."""
-    def decorator(func):
-        return func
-    return decorator
-
-from .models import (
-    Clarification,
-    ClarificationStatus,
-    ExecutionStatusEnum,
-    PortiaPlan,
-    PortiaPlanRun,
-    RetryPolicy,
-)
+    from portia import Portia, Config, DefaultToolRegistry
+    from portia.plan import Plan
+    PORTIA_SDK_AVAILABLE = True
+    _import_error = None
+except ImportError as e:
+    PORTIA_SDK_AVAILABLE = False
+    _import_error = str(e)
 
 logger = logging.getLogger(__name__)
 
 
-class PortiaClientError(AnumateError):
-    """Portia client error."""
-    pass
-
-
 class PortiaClient:
-    """Client for interacting with Portia Runtime."""
+    """
+    SDK-only Portia client with MCP integration for hackathon environment.
+    Configured to use Moonshot Kimi API as OpenAI-compatible backend.
+    """
     
-    def __init__(self, base_url: Optional[str] = None, timeout: float = 30.0):
-        """Initialize Portia client.
-        
-        Args:
-            base_url: Portia base URL (defaults to settings)
-            timeout: Request timeout in seconds
-        """
-        self.base_url = base_url or settings.PORTIA_BASE_URL
-        self.timeout = timeout
-        self._client: Optional[httpx.AsyncClient] = None
-    
-    async def __aenter__(self):
-        """Async context manager entry."""
-        self._client = httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=self.timeout,
-            headers={
-                "Content-Type": "application/json",
-                "User-Agent": "anumate-orchestrator/0.1.0",
-            }
-        )
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
-    
-    @property
-    def client(self) -> httpx.AsyncClient:
-        """Get HTTP client."""
-        if not self._client:
-            raise PortiaClientError("Client not initialized. Use async context manager.")
-        return self._client
-    
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(httpx.RequestError),
-    )
-    async def create_plan(self, plan: PortiaPlan) -> PortiaPlan:
-        """Create a plan in Portia Runtime.
-        
-        Args:
-            plan: Plan to create
-            
-        Returns:
-            Created plan with Portia metadata
-            
-        Raises:
-            PortiaClientError: If plan creation fails
-        """
-        try:
-            response = await self.client.post(
-                "/api/v1/plans",
-                json=plan.model_dump(exclude_unset=True)
+    def __init__(self, api_key: str):
+        if not PORTIA_SDK_AVAILABLE:
+            raise ImportError(
+                f"❌ Portia SDK not available: {_import_error}\n"
+                f"💡 Install with: pip install portia-sdk-python\n"
+                f"📚 Docs: https://docs.portialabs.ai/install"
             )
-            response.raise_for_status()
-            
-            plan_data = response.json()
-            logger.info(f"Created Portia plan: {plan_data.get('plan_id')}")
-            
-            return PortiaPlan(**plan_data)
-            
-        except httpx.HTTPStatusError as e:
-            error_msg = f"Failed to create Portia plan: {e.response.status_code}"
-            if e.response.content:
-                try:
-                    error_detail = e.response.json()
-                    error_msg += f" - {error_detail.get('message', 'Unknown error')}"
-                except json.JSONDecodeError:
-                    error_msg += f" - {e.response.text}"
-            
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-            
-        except httpx.RequestError as e:
-            error_msg = f"Request failed when creating Portia plan: {e}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
+        
+        self.api_key = api_key
+        self._portia = None
+        self._tool_registry = None
+        
+        # Validate environment for Moonshot Kimi
+        self._validate_kimi_config()
+        self._initialize_portia()
     
-    async def get_plan(self, plan_id: str) -> Optional[PortiaPlan]:
-        """Get a plan from Portia Runtime.
+    def _validate_kimi_config(self):
+        """Validate Moonshot Kimi configuration"""
+        openai_key = os.getenv("OPENAI_API_KEY")
+        openai_base = os.getenv("OPENAI_BASE_URL")
         
-        Args:
-            plan_id: Plan ID to retrieve
-            
-        Returns:
-            Plan if found, None otherwise
-            
-        Raises:
-            PortiaClientError: If request fails
-        """
-        try:
-            response = await self.client.get(f"/api/v1/plans/{plan_id}")
-            
-            if response.status_code == 404:
-                return None
-                
-            response.raise_for_status()
-            return PortiaPlan(**response.json())
-            
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                return None
-            error_msg = f"Failed to get Portia plan {plan_id}: {e.response.status_code}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-            
-        except httpx.RequestError as e:
-            error_msg = f"Request failed when getting Portia plan {plan_id}: {e}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
+        if not openai_key:
+            raise ValueError("❌ OPENAI_API_KEY required for Moonshot Kimi integration")
+        
+        if not openai_base:
+            raise ValueError("❌ OPENAI_BASE_URL required for Moonshot Kimi integration")
+        
+        if "moonshot" not in openai_base.lower():
+            raise ValueError(f"❌ Expected Moonshot base URL, got: {openai_base}")
+        
+        print(f"✅ Moonshot Kimi config validated:")
+        print(f"   Base URL: {openai_base}")
+        print(f"   Model: {os.getenv('OPENAI_MODEL', 'moonshot-v1-8k')}")
     
-    @trace_async("portia_client.create_run")
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(httpx.RequestError),
-    )
-    async def create_run(
-        self,
-        plan_id: str,
-        parameters: Optional[Dict[str, Any]] = None,
-        variables: Optional[Dict[str, Any]] = None,
-        triggered_by: Optional[str] = None,
-    ) -> PortiaPlanRun:
-        """Create a plan run in Portia Runtime.
-        
-        Args:
-            plan_id: Plan ID to execute
-            parameters: Execution parameters
-            variables: Runtime variables
-            triggered_by: User who triggered execution
-            
-        Returns:
-            Created plan run
-            
-        Raises:
-            PortiaClientError: If run creation fails
-        """
-        run_data = {
-            "plan_id": plan_id,
-            "parameters": parameters or {},
-            "variables": variables or {},
-            "triggered_by": triggered_by or "system",
-        }
-        
+    def _initialize_portia(self):
+        """Initialize Portia with default config and Moonshot Kimi backend"""
         try:
-            response = await self.client.post(
-                "/api/v1/runs",
-                json=run_data
+            # Use default configuration - will automatically use cloud storage
+            config = Config.from_default(
+                llm_provider="openai",
+                default_model=f"openai/{os.getenv('OPENAI_MODEL', 'moonshot-v1-8k')}"
             )
-            response.raise_for_status()
             
-            run_result = response.json()
-            logger.info(f"Created Portia run: {run_result.get('run_id')}")
+            # Get settings for MCP integration
+            from .settings import get_settings
+            settings = get_settings()
             
-            return PortiaPlanRun(**run_result)
+            # Build MCP registry with fallback to default tools
+            self._tool_registry = build_mcp_registry(config, settings)
             
-        except httpx.HTTPStatusError as e:
-            error_msg = f"Failed to create Portia run: {e.response.status_code}"
-            if e.response.content:
-                try:
-                    error_detail = e.response.json()
-                    error_msg += f" - {error_detail.get('message', 'Unknown error')}"
-                except json.JSONDecodeError:
-                    error_msg += f" - {e.response.text}"
+            # Initialize Portia with MCP-enabled tools
+            self._portia = Portia(config=config, tools=self._tool_registry)
             
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-            
-        except httpx.RequestError as e:
-            error_msg = f"Request failed when creating Portia run: {e}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-    
-    @trace_async("portia_client.get_run")
-    async def get_run(self, run_id: str) -> Optional[PortiaPlanRun]:
-        """Get a plan run from Portia Runtime.
-        
-        Args:
-            run_id: Run ID to retrieve
-            
-        Returns:
-            Plan run if found, None otherwise
-            
-        Raises:
-            PortiaClientError: If request fails
-        """
-        try:
-            response = await self.client.get(f"/api/v1/runs/{run_id}")
-            
-            if response.status_code == 404:
-                return None
-                
-            response.raise_for_status()
-            return PortiaPlanRun(**response.json())
-            
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                return None
-            error_msg = f"Failed to get Portia run {run_id}: {e.response.status_code}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-            
-        except httpx.RequestError as e:
-            error_msg = f"Request failed when getting Portia run {run_id}: {e}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-    
-    @trace_async("portia_client.pause_run")
-    async def pause_run(self, run_id: str) -> bool:
-        """Pause a running plan execution.
-        
-        Args:
-            run_id: Run ID to pause
-            
-        Returns:
-            True if paused successfully
-            
-        Raises:
-            PortiaClientError: If pause fails
-        """
-        try:
-            response = await self.client.post(f"/api/v1/runs/{run_id}/pause")
-            response.raise_for_status()
-            
-            logger.info(f"Paused Portia run: {run_id}")
-            return True
-            
-        except httpx.HTTPStatusError as e:
-            error_msg = f"Failed to pause Portia run {run_id}: {e.response.status_code}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-            
-        except httpx.RequestError as e:
-            error_msg = f"Request failed when pausing Portia run {run_id}: {e}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-    
-    @trace_async("portia_client.resume_run")
-    async def resume_run(self, run_id: str) -> bool:
-        """Resume a paused plan execution.
-        
-        Args:
-            run_id: Run ID to resume
-            
-        Returns:
-            True if resumed successfully
-            
-        Raises:
-            PortiaClientError: If resume fails
-        """
-        try:
-            response = await self.client.post(f"/api/v1/runs/{run_id}/resume")
-            response.raise_for_status()
-            
-            logger.info(f"Resumed Portia run: {run_id}")
-            return True
-            
-        except httpx.HTTPStatusError as e:
-            error_msg = f"Failed to resume Portia run {run_id}: {e.response.status_code}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-            
-        except httpx.RequestError as e:
-            error_msg = f"Request failed when resuming Portia run {run_id}: {e}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-    
-    @trace_async("portia_client.cancel_run")
-    async def cancel_run(self, run_id: str) -> bool:
-        """Cancel a plan execution.
-        
-        Args:
-            run_id: Run ID to cancel
-            
-        Returns:
-            True if cancelled successfully
-            
-        Raises:
-            PortiaClientError: If cancel fails
-        """
-        try:
-            response = await self.client.post(f"/api/v1/runs/{run_id}/cancel")
-            response.raise_for_status()
-            
-            logger.info(f"Cancelled Portia run: {run_id}")
-            return True
-            
-        except httpx.HTTPStatusError as e:
-            error_msg = f"Failed to cancel Portia run {run_id}: {e.response.status_code}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-            
-        except httpx.RequestError as e:
-            error_msg = f"Request failed when cancelling Portia run {run_id}: {e}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-    
-    @trace_async("portia_client.get_clarifications")
-    async def get_clarifications(self, run_id: str) -> List[Clarification]:
-        """Get clarifications for a plan run.
-        
-        Args:
-            run_id: Run ID to get clarifications for
-            
-        Returns:
-            List of clarifications
-            
-        Raises:
-            PortiaClientError: If request fails
-        """
-        try:
-            response = await self.client.get(f"/api/v1/runs/{run_id}/clarifications")
-            response.raise_for_status()
-            
-            clarifications_data = response.json()
-            return [Clarification(**c) for c in clarifications_data.get("clarifications", [])]
-            
-        except httpx.HTTPStatusError as e:
-            error_msg = f"Failed to get clarifications for run {run_id}: {e.response.status_code}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-            
-        except httpx.RequestError as e:
-            error_msg = f"Request failed when getting clarifications for run {run_id}: {e}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-    
-    @trace_async("portia_client.respond_to_clarification")
-    async def respond_to_clarification(
-        self,
-        clarification_id: str,
-        approved: bool,
-        approver_id: str,
-        reason: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Clarification:
-        """Respond to a clarification request.
-        
-        Args:
-            clarification_id: Clarification ID
-            approved: Whether the clarification is approved
-            approver_id: ID of the approver
-            reason: Reason for approval/rejection
-            metadata: Additional response metadata
-            
-        Returns:
-            Updated clarification
-            
-        Raises:
-            PortiaClientError: If response fails
-        """
-        response_data = {
-            "approved": approved,
-            "approver_id": approver_id,
-            "reason": reason,
-            "metadata": metadata or {},
-        }
-        
-        try:
-            response = await self.client.post(
-                f"/api/v1/clarifications/{clarification_id}/respond",
-                json=response_data
-            )
-            response.raise_for_status()
-            
-            clarification_data = response.json()
-            logger.info(f"Responded to clarification {clarification_id}: {'approved' if approved else 'rejected'}")
-            
-            return Clarification(**clarification_data)
-            
-        except httpx.HTTPStatusError as e:
-            error_msg = f"Failed to respond to clarification {clarification_id}: {e.response.status_code}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-            
-        except httpx.RequestError as e:
-            error_msg = f"Request failed when responding to clarification {clarification_id}: {e}"
-            logger.error(error_msg)
-            raise PortiaClientError(error_msg) from e
-    
-    @trace_async("portia_client.health_check")
-    async def health_check(self) -> bool:
-        """Check Portia Runtime health.
-        
-        Returns:
-            True if healthy, False otherwise
-        """
-        try:
-            response = await self.client.get("/health")
-            return response.status_code == 200
+            if settings.ENABLE_RAZORPAY_MCP:
+                print("✅ Portia SDK initialized with default config + Moonshot Kimi + Razorpay MCP")
+            else:
+                print("✅ Portia SDK initialized with default config + Moonshot Kimi backend")
             
         except Exception as e:
-            logger.warning(f"Portia health check failed: {e}")
+            raise RuntimeError(f"❌ Failed to initialize Portia SDK: {e}")
+    
+    async def _perform_readiness_probe(self) -> bool:
+        """Perform readiness probe for Portia SDK"""
+        try:
+            # Simple plan creation as readiness check
+            plan = self._portia.plan("ping")
+            return isinstance(plan, Plan)
+        except Exception as e:
+            print(f"⚠️  Portia readiness probe failed: {e}")
             return False
+    
+    def is_ready(self) -> bool:
+        """Check if Portia client is ready (synchronous)"""
+        if not self._portia:
+            return False
+        
+        try:
+            # Run async readiness probe
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self._perform_readiness_probe())
+            loop.close()
+            return result
+        except Exception:
+            return False
+    
+    async def create_plan(self, query: str) -> Dict[str, Any]:
+        """Create a plan from a query using Moonshot Kimi"""
+        if not self._portia:
+            raise RuntimeError("Portia not initialized")
+        
+        try:
+            plan = self._portia.plan(query)
+            return {
+                "status": "created",
+                "plan_id": str(plan.uuid) if hasattr(plan, 'uuid') else "unknown",
+                "query": query,
+                "backend": "moonshot-kimi"
+            }
+        except Exception as e:
+            raise RuntimeError(f"Failed to create plan: {e}")
+    
+    async def run_plan(self, plan_or_query: str) -> Dict[str, Any]:
+        """Run a plan using Moonshot Kimi backend"""
+        if not self._portia:
+            raise RuntimeError("Portia not initialized")
+        
+        try:
+            # Use the run method for direct query execution
+            run_result = self._portia.run(plan_or_query)
+            
+            return {
+                "status": "completed",
+                "query": plan_or_query,
+                "backend": "moonshot-kimi",
+                "result": run_result.model_dump() if hasattr(run_result, 'model_dump') else str(run_result)
+            }
+        except Exception as e:
+            raise RuntimeError(f"Failed to run plan: {e}")
+    
+    async def execute_plan(self, plan_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a plan - main method for orchestrator integration"""
+        query = plan_data.get("query") or plan_data.get("description", "Execute plan")
+        return await self.run_plan(query)
+    
+    def get_tool_registry(self):
+        """Get the tool registry (for testing and introspection)"""
+        return self._tool_registry
+
+
+# Factory function for settings integration
+def create_portia_client(api_key: str) -> PortiaClient:
+    """Factory function to create PortiaClient instance with cloud config"""
+    return PortiaClient(api_key=api_key)

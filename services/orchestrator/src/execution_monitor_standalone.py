@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Set
 from uuid import UUID
 
-from .models import ExecutionMetrics, ExecutionStatusEnum
+from models import ExecutionMetrics, ExecutionStatusEnum
 
 
 class ExecutionMonitorError(Exception):

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Body
 # Import from dependencies for demo
 from dependencies import TenantContext
 # Tracing simplified for demo
@@ -16,21 +16,248 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from dependencies import get_orchestrator_service, get_tenant_id, get_tenant_context_dep
-from models import (
-    ExecutePlanRequest,
-    ExecutePlanResponse,
-    ExecutionStatusResponse,
-    ExecutionControlResponse,
-    ExecutionMetricsResponse,
-    ErrorResponse,
-    ClarificationResponse,
-)
+
+# Import from api.models explicitly to avoid conflict with src.models
+import importlib.util
+spec = importlib.util.spec_from_file_location("api_models", os.path.join(os.path.dirname(__file__), '..', 'models.py'))
+api_models = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(api_models)
+
+ExecutePlanRequest = api_models.ExecutePlanRequest
+ExecutePlanResponse = api_models.ExecutePlanResponse  
+ExecutionStatusResponse = api_models.ExecutionStatusResponse
+ExecutionControlResponse = api_models.ExecutionControlResponse
+ExecutionMetricsResponse = api_models.ExecutionMetricsResponse
+ErrorResponse = api_models.ErrorResponse
 from src.models import ExecutionRequest, ExecutionHook, ClarificationStatus
 from src.service import OrchestratorService, OrchestratorServiceError
+from src.execute_via_portia import execute_via_portia, ExecutionError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["execution"])
+
+
+@router.post(
+    "/execute/portia",
+    summary="Execute capsule via Portia with human-in-loop approval and MCP support",
+    description="Execute a capsule YAML via Portia Runtime with clarifications bridged to Approvals service. Supports MCP engines for Razorpay integration.",
+    responses={
+        200: {"description": "Execution completed successfully"},
+        400: {"description": "Invalid request"},
+        403: {"description": "Capability verification failed"},
+        500: {"description": "Internal server error"},
+    }
+)
+async def execute_portia_endpoint(
+    request_data: dict = Body(...),
+    request: Request = None,
+) -> dict:
+    """Execute capsule via Portia with human-in-loop clarifications → approvals workflow and MCP support.
+    
+    Expected JSON payload:
+    {
+        "capsule_yaml": "string",        # The capsule YAML content (optional for MCP engines)
+        "capsule_id": "string",          # The capsule identifier (optional for MCP engines)
+        "plan_hash": "string",           # The plan hash for deterministic identification
+        "require_approval": true,        # Whether to require human approval for clarifications (default: true)
+        "capability_token": "string",    # Optional token for capability verification
+        "engine": "string",              # Optional engine: "razorpay_mcp_payment_link", "razorpay_mcp_refund"
+        "razorpay": {                    # Razorpay parameters (required for MCP engines)
+            "amount": 1000,              # Amount in paise (for payment links)
+            "currency": "INR",           # Currency
+            "description": "Payment",    # Description
+            "customer": {                # Optional customer info
+                "name": "John Doe",
+                "email": "john@example.com"
+            },
+            "payment_id": "pay_xxx"      # Required for refunds
+        }
+    }
+    
+    MCP Engine Examples:
+    
+    Payment Link:
+    {
+        "plan_hash": "payment_link_123",
+        "engine": "razorpay_mcp_payment_link",
+        "require_approval": true,
+        "razorpay": {
+            "amount": 1000,
+            "currency": "INR", 
+            "description": "Demo payment link",
+            "customer": {"name": "Judge", "email": "judge@example.com"}
+        }
+    }
+    
+    Refund:
+    {
+        "plan_hash": "refund_456",
+        "engine": "razorpay_mcp_refund",
+        "require_approval": true,
+        "razorpay": {
+            "payment_id": "pay_test_123",
+            "amount": 500
+        }
+    }
+    
+    Returns:
+    {
+        "plan_id": "string",            # Created Portia plan ID (traditional flow)
+        "plan_run_id": "string",        # Created plan run ID
+        "status": "string",             # Final execution status
+        "receipt_id": "string",         # Written receipt ID (if successful)
+        "mcp": {                        # MCP-specific results (for MCP engines)
+            "tool": "razorpay.payment_links.create",
+            "id": "plink_test_123",
+            "short_url": "https://rzp.io/i/abc",
+            "status": "created"
+        },
+        "approvals_count": number,      # Number of approvals processed
+        "duration_seconds": number      # Total execution time
+    }
+    
+    Raises:
+        HTTPException: If execution fails at any step
+    """
+    try:
+        # Extract required fields
+        plan_hash = request_data.get("plan_hash")
+        if not plan_hash:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "MISSING_PLAN_HASH",
+                    "message": "plan_hash is required",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+        
+        # Extract optional fields
+        capsule_yaml = request_data.get("capsule_yaml")
+        capsule_id = request_data.get("capsule_id")
+        require_approval = request_data.get("require_approval", True)
+        capability_token = request_data.get("capability_token")
+        engine = request_data.get("engine")
+        razorpay = request_data.get("razorpay", {})
+        
+        # Extract idempotency key from headers if present
+        idempotency_key = request.headers.get("Idempotency-Key") if request else None
+        
+        # Idempotency handling - combine plan_hash with idempotency key if provided
+        execution_key = f"{plan_hash}_{idempotency_key}" if idempotency_key else plan_hash
+        logger.info(f"Executing via Portia: engine={engine}, plan_hash={plan_hash}, idem_key={idempotency_key}")
+        
+        # Simple idempotency cache (in production, use Redis/database)
+        if not hasattr(execute_portia_endpoint, '_idempotency_cache'):
+            execute_portia_endpoint._idempotency_cache = {}
+            
+        # Check if this exact execution was already completed
+        if execution_key in execute_portia_endpoint._idempotency_cache:
+            cached_result = execute_portia_endpoint._idempotency_cache[execution_key]
+            logger.info(f"Returning cached idempotent result for key: {execution_key}")
+            return cached_result
+        
+        # MCP engine validation
+        if engine:
+            if not engine.startswith("razorpay_mcp_"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": "INVALID_ENGINE",
+                        "message": f"Unsupported engine: {engine}. Supported: razorpay_mcp_payment_link, razorpay_mcp_refund",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+            
+            # Validate Razorpay parameters based on engine
+            if engine == "razorpay_mcp_payment_link":
+                if not razorpay.get("amount"):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail={
+                            "error": "MISSING_AMOUNT",
+                            "message": "razorpay.amount is required for payment link creation",
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        }
+                    )
+                if not razorpay.get("description"):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail={
+                            "error": "MISSING_DESCRIPTION",
+                            "message": "razorpay.description is required for payment link creation",
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        }
+                    )
+            
+            elif engine == "razorpay_mcp_refund":
+                if not razorpay.get("payment_id"):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail={
+                            "error": "MISSING_PAYMENT_ID",
+                            "message": "razorpay.payment_id is required for refund creation",
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        }
+                    )
+        
+        # Traditional flow validation
+        else:
+            if not capsule_yaml:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": "MISSING_CAPSULE_YAML", 
+                        "message": "capsule_yaml is required for traditional execution (or specify an engine)",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+        
+        # Execute via Portia with enhanced MCP support
+        result = await execute_via_portia(
+            capsule_yaml=capsule_yaml,
+            capsule_id=capsule_id,
+            plan_hash=plan_hash,
+            require_approval=require_approval,
+            capability_token=capability_token,
+            engine=engine,
+            razorpay=razorpay,
+            tenant_id=request_data.get("tenant_id", "demo-tenant"),
+            actor=request_data.get("actor", "system")
+        )
+        
+        logger.info(f"Portia execution completed: {result}")
+        
+        # Cache successful result for idempotency
+        if execution_key:
+            execute_portia_endpoint._idempotency_cache[execution_key] = result
+            logger.info(f"Cached result for idempotency key: {execution_key}")
+        
+        return result
+        
+    except ExecutionError as e:
+        logger.error(f"Portia execution error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "EXECUTION_ERROR",
+                "message": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in Portia execution: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "INTERNAL_ERROR", 
+                "message": "An unexpected error occurred during Portia execution",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
 
 @router.post(

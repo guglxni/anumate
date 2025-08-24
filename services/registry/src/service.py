@@ -1,6 +1,6 @@
 """Capsule Registry Service - Business logic layer."""
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 from uuid import UUID
 
 import structlog
@@ -352,7 +352,7 @@ class CapsuleRegistryService:
             capsule.definition.dependencies
         )
     
-    async def get_dependency_tree(self, capsule_id: UUID) -> Dict[str, any]:
+    async def get_dependency_tree(self, capsule_id: UUID) -> Dict[str, Any]:
         """Get the full dependency tree for a Capsule."""
         capsule = await self.repository.get_by_id(capsule_id)
         if capsule is None:

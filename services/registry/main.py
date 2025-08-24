@@ -18,8 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy import select, text
 
 # Observability
-from anumate_logging import configure_logging, get_logger
-from anumate_tracing import configure_tracing
+from anumate_logging import setup_logging, get_logger
+from anumate_tracing import initialize_tracer
 from prometheus_fastapi_instrumentator import Instrumentator
 
 # Core imports
@@ -48,7 +48,7 @@ from .events import CapsuleEventPublisher
 
 
 # Configure logging first
-configure_logging()
+setup_logging()
 logger = get_logger(__name__)
 
 
@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"Loaded configuration: {settings.service_name}")
     
     # Configure observability
-    configure_tracing(settings.service_name)
+    initialize_tracer(settings.service_name)
     configure_events(settings.events)
     
     # Initialize database

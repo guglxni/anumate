@@ -1,0 +1,38 @@
+# Anumate Platform Demo Dependencies
+# WeMakeDevs AgentHack 2025
+
+# Core HTTP client for demo
+httpx>=0.25.0
+
+# Testing framework
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Environment management
+python-dotenv>=1.0.0
+
+# FastAPI and Uvicorn for services
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+
+# Portia SDK (production grade)
+portia>=0.7.2
+
+# JSON utilities
+pydantic>=2.0.0
+
+# Async support
+asyncio-mqtt>=0.11.0
+
+# Database support (for services)
+asyncpg>=0.28.0
+sqlalchemy>=2.0.0
+
+# Cryptography (for receipt service)
+cryptography>=41.0.0
+
+# Observability
+structlog>=23.0.0
+
+# Production deployment
+gunicorn>=21.0.0

@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.5.0",
     "httpx>=0.25.0",
     "tenacity>=8.2.0",
+    "portia-sdk-python>=0.7.0",
     "anumate-core-config",
     "anumate-infrastructure",
     "anumate-logging",

@@ -1,4 +1,144 @@
-"""Bridge between Portia Clarifications and Anumate Approvals service."""
+"""
+Clarifications bridge to Approvals service.
+Handles the human-in-loop approval workflow.
+"""
+
+import asyncio
+import logging
+from typing import Dict, Any
+from uuid import UUID, uuid4
+
+import httpx
+
+from .models import Clarification, ClarificationStatus
+from .portia_client import PortiaClient
+
+logger = logging.getLogger(__name__)
+
+
+async def open_approval(
+    approvals_base: str, 
+    clar: Dict[str, Any], 
+    tenant_id: str, 
+    actor: str
+) -> str:
+    """
+    Open approval request in Approvals service.
+    
+    Args:
+        approvals_base: Base URL of Approvals service
+        clar: Clarification object from Portia
+        tenant_id: Tenant ID for request
+        actor: Actor requesting approval
+        
+    Returns:
+        approval_id from Approvals service
+        
+    Raises:
+        httpx.HTTPStatusError: If approval creation fails
+    """
+    # Extract approval details from clarification
+    title = f"Execution Approval Required"
+    description = clar.get("prompt", "Please approve execution to continue")
+    
+    # Build approval request
+    approval_request = {
+        "title": title,
+        "description": description,
+        "metadata": {
+            "clarification_id": clar.get("id"),
+            "clarification_type": clar.get("type", "approval"),
+            "plan_run_id": clar.get("metadata", {}).get("plan_run_id"),
+            "actor": actor,
+            "source": "portia-orchestrator"
+        }
+    }
+    
+    logger.info(
+        f"Opening approval for tenant={tenant_id}, actor={actor}, "
+        f"clarification_id={clar.get('id')}"
+    )
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{approvals_base.rstrip('/')}/v1/approvals",
+            json=approval_request,
+            headers={
+                "Content-Type": "application/json",
+                "X-Tenant-ID": tenant_id
+            }
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        approval_id = result["approval_id"]
+        
+        logger.info(f"Opened approval: {approval_id}")
+        return approval_id
+
+
+async def wait_for_approval(
+    approvals_base: str, 
+    approval_id: str, 
+    timeout_s: int = 300, 
+    poll_s: int = 3
+) -> str:
+    """
+    Poll approval status until resolution.
+    
+    Args:
+        approvals_base: Base URL of Approvals service
+        approval_id: Approval ID to poll
+        timeout_s: Maximum time to wait (default 300s = 5min)
+        poll_s: Polling interval in seconds (default 3s)
+        
+    Returns:
+        Final status: "approved" or "rejected"
+        
+    Raises:
+        asyncio.TimeoutError: If timeout is reached
+        httpx.HTTPStatusError: If polling fails
+    """
+    logger.info(f"Waiting for approval {approval_id}, timeout={timeout_s}s")
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        start_time = asyncio.get_event_loop().time()
+        
+        while True:
+            # Check if we've exceeded timeout
+            elapsed = asyncio.get_event_loop().time() - start_time
+            if elapsed > timeout_s:
+                logger.error(f"Approval {approval_id} timed out after {timeout_s}s")
+                raise asyncio.TimeoutError(f"Approval {approval_id} timed out")
+            
+            # Poll approval status
+            try:
+                response = await client.get(
+                    f"{approvals_base.rstrip('/')}/v1/approvals/{approval_id}"
+                )
+                response.raise_for_status()
+                
+                approval = response.json()
+                status = approval.get("status")
+                
+                logger.debug(f"Approval {approval_id} status: {status}")
+                
+                # Check for terminal states
+                if status in {"approved", "rejected"}:
+                    logger.info(f"Approval {approval_id} resolved: {status}")
+                    return status
+                
+                # Wait before next poll
+                await asyncio.sleep(poll_s)
+                
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    logger.error(f"Approval {approval_id} not found")
+                    raise
+                
+                logger.warning(f"Error polling approval {approval_id}: {e}")
+                # Continue polling on transient errors
+                await asyncio.sleep(poll_s)
 
 import asyncio
 import logging
@@ -7,13 +147,10 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 import httpx
-try:
-    from anumate_infrastructure.event_bus import EventBus
-except ImportError:
-    EventBus = None
+import logging
+from typing import Dict, Any
 
-from .models import Clarification, ClarificationStatus
-from .portia_client import PortiaClient
+logger = logging.getLogger(__name__)
 
 # Mock trace_async decorator for development
 def trace_async(name):

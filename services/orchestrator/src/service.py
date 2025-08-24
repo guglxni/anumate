@@ -14,13 +14,18 @@ except ImportError:
     EventBus = None
     RedisManager = None
 
-from .capability_validator import CapabilityValidator
+from src.capability_validator import CapabilityValidator
 from .clarifications_bridge import ClarificationsBridge
 try:
-    from .execution_monitor import ExecutionMonitor
+    from .portia_client import PortiaClient
+    from .clarifications_bridge import open_approval, wait_for_approval  
+    from .receipts_client import write_receipt
+    from .plan_transformer_new import to_portia_plan
+    from .captokens_client import verify_token
+    # from .execution_monitor import ExecutionMonitor  # Skip for now
 except ImportError:
-    from .execution_monitor_standalone import ExecutionMonitor
-from .models import (
+    from execution_monitor_standalone import ExecutionMonitor
+from models import (
     ExecutionRequest,
     ExecutionResponse,
     ExecutionStatusModel,
@@ -29,9 +34,9 @@ from .models import (
     ExecutionMetrics,
     CapabilityValidation,
 )
-from .plan_transformer import PlanTransformer
-from .portia_client import PortiaClient, PortiaClientError
-from .retry_handler import RetryHandler
+from plan_transformer import PlanTransformer
+from portia_sdk_client import PortiaSDKClient, PortiaSDKClientError
+from retry_handler import RetryHandler
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +198,7 @@ class OrchestratorService:
             Execution status or None if not found
         """
         try:
-            async with PortiaClient() as portia_client:
+            async with PortiaSDKClient() as portia_client:
                 # Get run status from Portia
                 portia_run = await portia_client.get_run(run_id)
                 
@@ -243,7 +248,7 @@ class OrchestratorService:
             True if paused successfully
         """
         try:
-            async with PortiaClient() as portia_client:
+            async with PortiaSDKClient() as portia_client:
                 success = await portia_client.pause_run(run_id)
                 
                 if success and self.event_bus:
@@ -271,7 +276,7 @@ class OrchestratorService:
             True if resumed successfully
         """
         try:
-            async with PortiaClient() as portia_client:
+            async with PortiaSDKClient() as portia_client:
                 success = await portia_client.resume_run(run_id)
                 
                 if success and self.event_bus:
@@ -299,7 +304,7 @@ class OrchestratorService:
             True if cancelled successfully
         """
         try:
-            async with PortiaClient() as portia_client:
+            async with PortiaSDKClient() as portia_client:
                 success = await portia_client.cancel_run(run_id)
                 
                 if success:
@@ -393,7 +398,7 @@ class OrchestratorService:
         Returns:
             Execution response
         """
-        async with PortiaClient() as portia_client:
+        async with PortiaSDKClient() as portia_client:
             # Create plan in Portia
             created_plan = await portia_client.create_plan(portia_plan)
             
@@ -554,3 +559,219 @@ class OrchestratorService:
                 return now + timedelta(seconds=remaining)
         
         return None
+
+
+# New production-grade execute_via_portia function  
+from .settings import Settings
+from .portia_client import PortiaClient
+from .clarifications_bridge import open_approval, wait_for_approval
+from .receipts_client import write_receipt
+from .plan_transformer_new import to_portia_plan
+from .captokens_client import verify_token
+from .mcp_execution import execute_via_portia_mcp
+
+# Initialize settings
+settings = Settings()
+
+
+async def execute_via_portia(
+    *,
+    capsule_yaml: str | None = None,
+    capsule_id: str | None = None,
+    plan_hash: str,
+    require_approval: bool,
+    capability_token: str | None = None,
+    tenant_id: str,
+    actor: str,
+    engine: str | None = None,
+    razorpay: dict | None = None,
+    **kwargs
+) -> dict:
+    """
+    Execute a plan via Portia with human-in-loop clarifications and MCP support.
+    
+    Enhanced with MCP engine support:
+    - Traditional: Uses capsule_yaml with Portia plans
+    - MCP engines: "razorpay_mcp_payment_link", "razorpay_mcp_refund"
+    
+    Production-grade implementation with:
+    - Capability token verification
+    - Clarifications → Approvals bridge
+    - Receipt generation on completion
+    - Full error handling and logging
+    - MCP-powered Razorpay integrations
+    """
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting Portia execution: plan_hash={plan_hash}, engine={engine}, tenant_id={tenant_id}, actor={actor}")
+    
+    # Route to MCP execution if MCP engine specified
+    if engine and engine.startswith("razorpay_mcp_"):
+        logger.info(f"Routing to MCP execution for engine: {engine}")
+        return await execute_via_portia_mcp(
+            engine=engine,
+            capsule_yaml=capsule_yaml,
+            plan_hash=plan_hash,
+            require_approval=require_approval,
+            capability_token=capability_token,
+            tenant_id=tenant_id,
+            actor=actor,
+            razorpay=razorpay,
+            **kwargs
+        )
+    
+    # Traditional Portia execution flow
+    start_time = datetime.now(timezone.utc)
+    
+    try:
+        # Step 1: Verify capability token if provided
+        if capability_token:
+            logger.info(f"Verifying capability token for tenant_id={tenant_id}")
+            await verify_token(
+                base=settings.CAPTOKENS_BASE_URL,
+                token=capability_token,
+                required_caps=["demo.run"]
+            )
+            logger.info("✅ Capability token verified")
+        
+        # Step 2: Resolve YAML
+        if not capsule_yaml and not capsule_id:
+            raise ValueError("Either capsule_yaml or capsule_id must be provided")
+        
+        if not capsule_yaml:
+            # TODO: Fetch from Registry service
+            raise NotImplementedError("Fetching from Registry not yet implemented - provide capsule_yaml")
+        
+        logger.info(f"Using provided capsule YAML (length: {len(capsule_yaml)})")
+        
+        # Step 3: Transform to Portia plan
+        logger.info("Transforming capsule to Portia plan")
+        portia_plan = to_portia_plan(capsule_yaml, require_approval)
+        
+        # Step 4: Create plan and start run
+        logger.info("Initializing Portia client")
+        portia_client = PortiaClient()
+        
+        logger.info("Creating Portia plan")
+        plan_id = await portia_client.create_plan(portia_plan)
+        logger.info(f"✅ Plan created: {plan_id}")
+        
+        logger.info("Starting plan run")
+        run_metadata = {
+            "tenant_id": tenant_id,
+            "actor": actor,
+            "plan_hash": plan_hash,
+            "require_approval": require_approval
+        }
+        plan_run_id = await portia_client.start_run(plan_id, run_metadata)
+        logger.info(f"✅ Plan run started: {plan_run_id}")
+        
+        # Step 5: Clarifications loop
+        approvals = []
+        logger.info("Starting clarifications monitoring loop")
+        
+        max_iterations = 50  # Prevent infinite loops
+        for iteration in range(max_iterations):
+            logger.info(f"Clarifications check iteration {iteration + 1}")
+            
+            # Get current clarifications
+            clarifications = await portia_client.list_clarifications(plan_run_id)
+            
+            for clar in clarifications:
+                clar_id = clar.get('id')
+                if clar.get('status') == 'pending':
+                    logger.info(f"Processing pending clarification: {clar_id}")
+                    
+                    # Open approval
+                    approval_id = await open_approval(
+                        approvals_base=settings.APPROVALS_BASE_URL,
+                        clar=clar,
+                        tenant_id=tenant_id,
+                        actor=actor
+                    )
+                    logger.info(f"✅ Approval created: {approval_id}")
+                    
+                    # Wait for approval decision
+                    approval_status = await wait_for_approval(
+                        approvals_base=settings.APPROVALS_BASE_URL,
+                        approval_id=approval_id,
+                        timeout_s=300,
+                        poll_s=3
+                    )
+                    logger.info(f"✅ Approval decision: {approval_status}")
+                    
+                    approvals.append({
+                        "clarification_id": clar_id,
+                        "approval_id": approval_id,
+                        "status": approval_status,
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    })
+                    
+                    if approval_status == "approved":
+                        # Respond to clarification
+                        await portia_client.respond_clarification(
+                            plan_run_id, clar_id, {"approved": True}
+                        )
+                        logger.info(f"✅ Clarification approved: {clar_id}")
+                    else:
+                        # Rejected - cancel run if supported
+                        logger.warning(f"❌ Clarification rejected: {clar_id}")
+                        # TODO: Cancel run if Portia SDK supports it
+                        break
+            
+            # Check if run is complete
+            run_status = await portia_client.get_run(plan_run_id)
+            current_status = run_status.get('status', '').lower()
+            
+            if current_status in ['succeeded', 'failed', 'cancelled']:
+                logger.info(f"✅ Run completed with status: {current_status}")
+                break
+            
+            # Wait before next iteration
+            await asyncio.sleep(2)
+        
+        # Step 6: Get final run status
+        final_run = await portia_client.get_run(plan_run_id)
+        final_status = final_run.get('status', 'unknown')
+        logger.info(f"Final run status: {final_status}")
+        
+        # Step 7: Write receipt
+        end_time = datetime.now(timezone.utc)
+        receipt_payload = {
+            "plan_hash": plan_hash,
+            "plan_id": plan_id,
+            "plan_run_id": plan_run_id,
+            "status": final_status,
+            "approvals": approvals,
+            "actor": actor,
+            "tenant_id": tenant_id,
+            "started_at": start_time.isoformat(),
+            "completed_at": end_time.isoformat(),
+            "duration_seconds": (end_time - start_time).total_seconds(),
+            "metadata": run_metadata
+        }
+        
+        logger.info("Writing execution receipt")
+        receipt = await write_receipt(
+            receipts_base=settings.RECEIPTS_BASE_URL,
+            payload=receipt_payload,
+            tenant_id=tenant_id
+        )
+        receipt_id = receipt.get('receipt_id')
+        logger.info(f"✅ Receipt written: {receipt_id}")
+        
+        # Step 8: Return result
+        result = {
+            "plan_id": plan_id,
+            "plan_run_id": plan_run_id,
+            "status": final_status,
+            "receipt_id": receipt_id,
+            "approvals_count": len(approvals),
+            "duration_seconds": (end_time - start_time).total_seconds()
+        }
+        
+        logger.info(f"✅ Execution completed successfully: {result}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ Execution failed: {e}", exc_info=True)
+        raise

@@ -31,7 +31,7 @@ except ImportError:
             return func
         return decorator
 
-from .models import ExecutionStatusEnum, IdempotencyKey, RetryPolicy
+from models import ExecutionStatusEnum, IdempotencyKey, RetryPolicy
 
 logger = logging.getLogger(__name__)
 

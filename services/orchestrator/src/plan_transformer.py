@@ -11,7 +11,7 @@ def trace(name):
         return func
     return decorator
 
-from .models import PortiaPlan, RetryPolicy
+from models import PortiaPlan, RetryPolicy
 
 logger = logging.getLogger(__name__)
 

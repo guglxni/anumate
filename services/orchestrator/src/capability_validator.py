@@ -15,7 +15,12 @@ except ImportError:
         ANUMATE_ENV = "development"
     settings = MockSettings()
 
-from .models import CapabilityValidation
+# Import from src.models to avoid conflict with api.models
+import sys
+import os
+src_path = os.path.dirname(__file__)
+sys.path.insert(0, src_path)
+from models import CapabilityValidation
 
 logger = logging.getLogger(__name__)
 
