@@ -1,0 +1,199 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "anumate-capsule-registry"
+version = "1.0.0"
+description = "Anumate Capsule Registry Service - Secure storage and versioning for execution Capsules"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Anumate Team", email = "engineering@anumate.io"},
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.11"
+dependencies = [
+    # Core FastAPI stack
+    "fastapi>=0.104.0,<1.0.0",
+    "uvicorn[standard]>=0.24.0,<1.0.0",
+    "pydantic>=2.5.0,<3.0.0",
+    "pydantic-settings>=2.1.0,<3.0.0",
+    
+    # Database
+    "sqlalchemy[asyncio]>=2.0.0,<3.0.0",
+    "alembic>=1.13.0,<2.0.0",
+    "asyncpg>=0.29.0,<1.0.0",
+    "aiosqlite>=0.19.0,<1.0.0",
+    
+    # HTTP client
+    "httpx>=0.25.0,<1.0.0",
+    
+    # Cryptography
+    "cryptography>=41.0.0,<42.0.0",
+    
+    # Observability
+    "prometheus-fastapi-instrumentator>=6.1.0,<7.0.0",
+    "opentelemetry-api>=1.21.0,<2.0.0",
+    "opentelemetry-sdk>=1.21.0,<2.0.0",
+    "opentelemetry-instrumentation-fastapi>=0.42.0,<1.0.0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.42.0,<1.0.0",
+    "opentelemetry-instrumentation-httpx>=0.42.0,<1.0.0",
+    "opentelemetry-exporter-otlp>=1.21.0,<2.0.0",
+    
+    # Shared Anumate libraries
+    "anumate-core-config@file://../../packages/anumate-core-config",
+    "anumate-errors@file://../../packages/anumate-errors",
+    "anumate-logging@file://../../packages/anumate-logging",
+    "anumate-tracing@file://../../packages/anumate-tracing", 
+    "anumate-tenancy@file://../../packages/anumate-tenancy",
+    "anumate-oidc@file://../../packages/anumate-oidc",
+    "anumate-events@file://../../packages/anumate-events",
+    "anumate-crypto@file://../../packages/anumate-crypto",
+    "anumate-planhash@file://../../packages/anumate-planhash",
+    "anumate-redaction@file://../../packages/anumate-redaction",
+    "anumate-idempotency@file://../../packages/anumate-idempotency",
+    "anumate-receipt@file://../../packages/anumate-receipt",
+    
+    # YAML processing
+    "pyyaml>=6.0.1,<7.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=7.4.0,<8.0.0",
+    "pytest-asyncio>=0.21.0,<1.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "pytest-mock>=3.12.0,<4.0.0",
+    "httpx>=0.25.0,<1.0.0",
+    
+    # Development tools
+    "black>=23.9.0,<24.0.0",
+    "isort>=5.12.0,<6.0.0",
+    "flake8>=6.1.0,<7.0.0",
+    "mypy>=1.6.0,<2.0.0",
+    "pre-commit>=3.5.0,<4.0.0",
+    
+    # Documentation
+    "mkdocs>=1.5.0,<2.0.0",
+    "mkdocs-material>=9.4.0,<10.0.0",
+    "mkdocstrings[python]>=0.23.0,<1.0.0",
+]
+
+[project.scripts]
+capsule-registry = "main:main"
+
+[project.urls]
+Homepage = "https://anumate.io"
+Documentation = "https://docs.anumate.io/services/capsule-registry/"
+Repository = "https://github.com/anumate/platform"
+Issues = "https://github.com/anumate/platform/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | migrations
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["anumate_*"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "alembic.*",
+    "prometheus_fastapi_instrumentator.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests", 
+    "e2e: End-to-end tests",
+    "slow: Slow running tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/conftest.py",
+    "*/venv/*",
+    "*/migrations/*",
+    "*/alembic/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

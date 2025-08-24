@@ -1,10 +1,10 @@
 """Capsule Registry API endpoints."""
 
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 
 from ..dependencies import (
@@ -18,6 +18,7 @@ from src.models import (
     Capsule,
     CapsuleCreateRequest,
     CapsuleUpdateRequest,
+    CapsuleVersionRequest,
     CapsuleListResponse,
     CapsuleValidationResult
 )
@@ -208,6 +209,259 @@ async def update_capsule(
         )
 
 
+@router.post(
+    "/{capsule_id}/versions",
+    response_model=Capsule,
+    status_code=status.HTTP_201_CREATED,
+    summary="Publish new version",
+    description="Publish a new version of an existing Capsule with idempotency support"
+)
+async def publish_version(
+    capsule_id: UUID,
+    payload: CapsuleVersionRequest,
+    service: Annotated[CapsuleRegistryService, Depends(get_capsule_service)],
+    current_user: Annotated[str, Depends(get_current_user)],
+    current_tenant: Annotated[UUID, Depends(get_current_tenant)],
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    """Publish a new version of a Capsule with idempotency support."""
+    try:
+        logger.info("Publishing capsule version", 
+                   capsule_id=str(capsule_id),
+                   actor=current_user,
+                   tenant_id=str(current_tenant),
+                   idempotency_key=idempotency_key)
+        
+        capsule = await service.publish_version(
+            capsule_id=capsule_id,
+            payload=payload,
+            actor=current_user,
+            tenant_id=current_tenant,
+            idempotency_key=idempotency_key,
+        )
+        
+        logger.info("Capsule version published successfully", 
+                   capsule_id=str(capsule_id),
+                   version=capsule.version)
+        
+        return capsule
+        
+    except ValueError as e:
+        logger.warning("Capsule version publish failed", 
+                      capsule_id=str(capsule_id),
+                      error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error("Error publishing capsule version", 
+                    capsule_id=str(capsule_id),
+                    error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@router.get(
+    "/{capsule_id}/versions",
+    response_model=List[Capsule],
+    summary="List Capsule versions",
+    description="Get all versions of a specific Capsule"
+)
+async def get_capsule_versions(
+    capsule_id: UUID,
+    service: Annotated[CapsuleRegistryService, Depends(get_capsule_service)],
+    current_tenant: Annotated[UUID, Depends(get_current_tenant)]
+) -> List[Capsule]:
+    """Get all versions of a specific Capsule."""
+    try:
+        logger.debug("Fetching capsule versions", 
+                    capsule_id=str(capsule_id),
+                    tenant_id=str(current_tenant))
+        
+        versions = await service.get_capsule_versions(capsule_id)
+        
+        logger.debug("Capsule versions fetched successfully", 
+                    capsule_id=str(capsule_id),
+                    count=len(versions))
+        
+        return versions
+        
+    except Exception as e:
+        logger.error("Error fetching capsule versions", 
+                    capsule_id=str(capsule_id),
+                    error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@router.get(
+    "/{capsule_id}/versions/{version}",
+    response_model=Capsule,
+    summary="Get specific Capsule version",
+    description="Get a specific version of a Capsule"
+)
+async def get_capsule_version(
+    capsule_id: UUID,
+    version: str,
+    service: Annotated[CapsuleRegistryService, Depends(get_capsule_service)],
+    current_tenant: Annotated[UUID, Depends(get_current_tenant)]
+) -> Capsule:
+    """Get a specific version of a Capsule."""
+    try:
+        logger.debug("Fetching capsule version", 
+                    capsule_id=str(capsule_id),
+                    version=version,
+                    tenant_id=str(current_tenant))
+        
+        capsule = await service.get_capsule_version(capsule_id, version)
+        
+        if capsule is None:
+            logger.warning("Capsule version not found", 
+                          capsule_id=str(capsule_id),
+                          version=version)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Capsule {capsule_id} version {version} not found"
+            )
+        
+        logger.debug("Capsule version fetched successfully", 
+                    capsule_id=str(capsule_id),
+                    version=version)
+        
+        return capsule
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error fetching capsule version", 
+                    capsule_id=str(capsule_id),
+                    version=version,
+                    error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@router.patch(
+    "/{capsule_id}",
+    response_model=Capsule,
+    summary="Soft delete/restore Capsule",
+    description="Soft delete or restore a Capsule with ETag support"
+)
+async def patch_capsule(
+    capsule_id: UUID,
+    request: Dict[str, Any],
+    service: Annotated[CapsuleRegistryService, Depends(get_capsule_service)],
+    current_user: Annotated[str, Depends(get_current_user)],
+    current_tenant: Annotated[UUID, Depends(get_current_tenant)],
+    if_match: Optional[str] = Header(default=None, alias="If-Match")
+) -> Capsule:
+    """Soft delete or restore a Capsule with ETag support."""
+    try:
+        logger.info("Patching capsule", 
+                   capsule_id=str(capsule_id),
+                   actor=current_user,
+                   tenant_id=str(current_tenant),
+                   etag=if_match)
+        
+        # Handle soft delete/restore operations
+        operation = request.get("operation")
+        if operation == "delete":
+            capsule = await service.soft_delete_capsule(
+                capsule_id=capsule_id,
+                actor=current_user,
+                tenant_id=current_tenant,
+                expected_etag=if_match
+            )
+        elif operation == "restore":
+            capsule = await service.restore_capsule(
+                capsule_id=capsule_id,
+                actor=current_user,
+                tenant_id=current_tenant,
+                expected_etag=if_match
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid operation. Use 'delete' or 'restore'"
+            )
+        
+        logger.info("Capsule patched successfully", 
+                   capsule_id=str(capsule_id),
+                   operation=operation)
+        
+        return capsule
+        
+    except ValueError as e:
+        logger.warning("Capsule patch failed", 
+                      capsule_id=str(capsule_id),
+                      error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error("Error patching capsule", 
+                    capsule_id=str(capsule_id),
+                    error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@router.post(
+    "/{capsule_id}/lint",
+    response_model=CapsuleValidationResult,
+    summary="Lint Capsule YAML",
+    description="Validate and lint a Capsule's YAML without modifying it"
+)
+async def lint_capsule(
+    capsule_id: UUID,
+    service: Annotated[CapsuleRegistryService, Depends(get_capsule_service)],
+    current_tenant: Annotated[UUID, Depends(get_current_tenant)]
+) -> CapsuleValidationResult:
+    """Lint and validate a Capsule's YAML."""
+    try:
+        logger.debug("Linting capsule", 
+                    capsule_id=str(capsule_id),
+                    tenant_id=str(current_tenant))
+        
+        result = await service.lint_capsule(capsule_id)
+        
+        if result is None:
+            logger.warning("Capsule not found for linting", 
+                          capsule_id=str(capsule_id))
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Capsule {capsule_id} not found"
+            )
+        
+        logger.debug("Capsule linting completed", 
+                    capsule_id=str(capsule_id),
+                    valid=result.valid,
+                    error_count=len(result.errors))
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error linting capsule", 
+                    capsule_id=str(capsule_id),
+                    error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
 @router.delete(
     "/{capsule_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -365,7 +619,7 @@ async def validate_capsule_yaml(
 
 @router.post(
     "/{capsule_id}/verify-signature",
-    response_model=dict,
+    response_model=Dict[str, Any],
     summary="Verify Capsule signature",
     description="Verify the digital signature of a Capsule"
 )
@@ -373,7 +627,7 @@ async def verify_capsule_signature(
     capsule_id: UUID,
     service: Annotated[CapsuleRegistryService, Depends(get_capsule_service)],
     current_tenant: Annotated[UUID, Depends(get_current_tenant)]
-) -> dict:
+) -> Dict[str, Any]:
     """Verify the digital signature of a Capsule."""
     try:
         logger.debug("Verifying capsule signature", 
@@ -438,7 +692,7 @@ async def get_capsule_dependencies(
 
 @router.post(
     "/{capsule_id}/check-integrity",
-    response_model=dict,
+    response_model=Dict[str, Any],
     summary="Check Capsule integrity",
     description="Check the integrity of a Capsule (checksum validation)"
 )
@@ -446,7 +700,7 @@ async def check_capsule_integrity(
     capsule_id: UUID,
     service: Annotated[CapsuleRegistryService, Depends(get_capsule_service)],
     current_tenant: Annotated[UUID, Depends(get_current_tenant)]
-) -> dict:
+) -> Dict[str, Any]:
     """Check the integrity of a Capsule."""
     try:
         logger.debug("Checking capsule integrity", 

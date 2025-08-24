@@ -259,6 +259,17 @@ class CapsuleUpdateRequest(BaseModel):
         return CapsuleDefinition.from_yaml(self.yaml_content)
 
 
+class CapsuleVersionRequest(BaseModel):
+    """Request model for publishing a new Capsule version."""
+    
+    yaml_content: str = Field(..., description="YAML content of the new version")
+    sign_capsule: bool = Field(default=False, description="Whether to sign the capsule")
+    
+    def to_capsule_definition(self) -> CapsuleDefinition:
+        """Convert YAML content to CapsuleDefinition."""
+        return CapsuleDefinition.from_yaml(self.yaml_content)
+
+
 class CapsuleListResponse(BaseModel):
     """Response model for listing Capsules."""
     

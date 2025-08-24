@@ -1,0 +1,815 @@
+openapi: 3.1.0
+info:
+  title: Anumate Capsule Registry API
+  description: |
+    Capsule Registry service for managing automation Capsules with versioning,
+    signing, and multi-tenant isolation. Provides CRUD operations for Capsules
+    with YAML validation, content hashing, digital signatures, and WORM storage.
+  version: 1.0.0
+  contact:
+    name: Anumate Platform Team
+    url: https://github.com/anumate/platform
+
+servers:
+  - url: http://localhost:8010
+    description: Development server
+  - url: https://api.anumate.com
+    description: Production server
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check endpoint
+      operationId: health_check
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+
+  /readyz:
+    get:
+      tags: [Health]
+      summary: Readiness check endpoint
+      operationId: readiness_check
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ready]
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        enum: [ready, not_ready]
+                      worm_storage:
+                        type: string
+                        enum: [ready, not_ready]
+
+  /metrics:
+    get:
+      tags: [Observability]
+      summary: Prometheus metrics
+      operationId: get_metrics
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /v1/capsules:
+    post:
+      tags: [Capsules]
+      summary: Create new Capsule
+      operationId: create_capsule
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCapsuleRequest'
+      responses:
+        '201':
+          description: Capsule created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapsuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    get:
+      tags: [Capsules]
+      summary: List Capsules with filtering and pagination
+      operationId: list_capsules
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: q
+          in: query
+          description: Search query for name/description
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            $ref: '#/components/schemas/CapsuleStatus'
+        - name: tool
+          in: query
+          description: Filter by allowed tool
+          schema:
+            type: string
+        - name: updated_since
+          in: query
+          description: Filter by last update timestamp
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          description: Page number (1-based)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          description: Items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: List of Capsules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapsuleListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/capsules/{id}:
+    get:
+      tags: [Capsules]
+      summary: Get Capsule metadata
+      operationId: get_capsule
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Capsule metadata
+          headers:
+            ETag:
+              description: Entity tag for concurrency control
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapsuleDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    patch:
+      tags: [Capsules]
+      summary: Update Capsule (soft delete/restore)
+      operationId: update_capsule
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          required: true
+          description: ETag for concurrency control
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCapsuleRequest'
+      responses:
+        '200':
+          description: Capsule updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapsuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [Capsules]
+      summary: Delete Capsule (hard delete - admin only)
+      operationId: delete_capsule
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: hard
+          in: query
+          required: true
+          description: Must be true for hard delete
+          schema:
+            type: boolean
+            enum: [true]
+      responses:
+        '204':
+          description: Capsule deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/capsules/{id}/versions:
+    get:
+      tags: [Capsule Versions]
+      summary: List Capsule versions
+      operationId: list_capsule_versions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of Capsule versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CapsuleVersionSummary'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Capsule Versions]
+      summary: Publish new Capsule version
+      operationId: publish_capsule_version
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishVersionRequest'
+      responses:
+        '201':
+          description: Version published successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapsuleVersionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/capsules/{id}/versions/{version}:
+    get:
+      tags: [Capsule Versions]
+      summary: Get specific Capsule version YAML and metadata
+      operationId: get_capsule_version
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Capsule version with YAML content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapsuleVersionDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/capsules/{id}/lint:
+    post:
+      tags: [Validation]
+      summary: Validate Capsule YAML without publishing
+      operationId: lint_capsule
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LintRequest'
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LintResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OIDC JWT access token
+
+  parameters:
+    TenantHeader:
+      name: X-Tenant-ID
+      in: header
+      required: true
+      description: Tenant identifier for multi-tenancy
+      schema:
+        type: string
+        format: uuid
+
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Idempotency key for safe retries
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+
+  schemas:
+    CapsuleStatus:
+      type: string
+      enum: [active, deleted]
+      description: Capsule lifecycle status
+
+    CapsuleVisibility:
+      type: string
+      enum: [private, org]
+      description: Capsule visibility scope
+
+    CreateCapsuleRequest:
+      type: object
+      required: [name, owner, visibility, yaml]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Optional explicit Capsule ID
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^[a-zA-Z0-9_-]+$'
+          description: Capsule name (unique within tenant)
+        description:
+          type: string
+          maxLength: 1024
+          description: Optional description
+        tags:
+          type: array
+          items:
+            type: string
+            maxLength: 50
+          maxItems: 20
+          description: Optional tags for categorization
+        owner:
+          type: string
+          description: Owner identifier
+        visibility:
+          $ref: '#/components/schemas/CapsuleVisibility'
+        yaml:
+          type: string
+          description: Capsule YAML content
+
+    UpdateCapsuleRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/CapsuleStatus'
+
+    PublishVersionRequest:
+      type: object
+      required: [yaml]
+      properties:
+        yaml:
+          type: string
+          description: Capsule YAML content
+        message:
+          type: string
+          maxLength: 255
+          description: Optional version message
+
+    LintRequest:
+      type: object
+      required: [yaml]
+      properties:
+        yaml:
+          type: string
+          description: Capsule YAML to validate
+
+    CapsuleResponse:
+      type: object
+      required: [capsule_id, version, content_hash, signature, uri, created_at]
+      properties:
+        capsule_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+        content_hash:
+          type: string
+          description: SHA-256 hash of canonical content
+        signature:
+          type: string
+          description: Ed25519 signature (base64)
+        uri:
+          type: string
+          format: uri
+          description: WORM storage URI
+        created_at:
+          type: string
+          format: date-time
+
+    CapsuleDetailResponse:
+      type: object
+      required: [id, name, owner, visibility, status, latest_version, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        owner:
+          type: string
+        visibility:
+          $ref: '#/components/schemas/CapsuleVisibility'
+        status:
+          $ref: '#/components/schemas/CapsuleStatus'
+        latest_version:
+          type: integer
+          minimum: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CapsuleListResponse:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapsuleDetailResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    CapsuleVersionSummary:
+      type: object
+      required: [version, content_hash, signature, created_at, created_by]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        content_hash:
+          type: string
+        signature:
+          type: string
+        uri:
+          type: string
+          format: uri
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+
+    CapsuleVersionResponse:
+      type: object
+      required: [capsule_id, version, content_hash, signature, uri, created_at]
+      properties:
+        capsule_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+        content_hash:
+          type: string
+        signature:
+          type: string
+        uri:
+          type: string
+          format: uri
+        created_at:
+          type: string
+          format: date-time
+
+    CapsuleVersionDetailResponse:
+      type: object
+      required: [version, content_hash, signature, yaml, created_at, created_by]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        content_hash:
+          type: string
+        signature:
+          type: string
+        uri:
+          type: string
+          format: uri
+        yaml:
+          type: string
+          description: Capsule YAML content (may be redacted)
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+
+    LintResponse:
+      type: object
+      required: [valid, content_hash]
+      properties:
+        valid:
+          type: boolean
+        content_hash:
+          type: string
+          description: SHA-256 hash if valid
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationError'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationWarning'
+
+    ValidationError:
+      type: object
+      required: [code, message, path]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+          description: JSON path to error location
+
+    ValidationWarning:
+      type: object
+      required: [code, message, path]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+          description: JSON path to warning location
+
+    Pagination:
+      type: object
+      required: [page, page_size, total_items, total_pages]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+        total_items:
+          type: integer
+          minimum: 0
+        total_pages:
+          type: integer
+          minimum: 0
+
+    Error:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: Problem type URI (RFC 7807)
+        title:
+          type: string
+          description: Human-readable summary
+        status:
+          type: integer
+          description: HTTP status code
+        detail:
+          type: string
+          description: Human-readable explanation
+        instance:
+          type: string
+          format: uri
+          description: Problem instance URI
+        trace_id:
+          type: string
+          description: Distributed tracing ID
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    PreconditionFailed:
+      description: Precondition failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
