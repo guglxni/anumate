@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+  external_labels:
+    monitor: 'anumate-eventbus'
+
+rule_files:
+  - "eventbus_rules.yml"
+
+scrape_configs:
+  - job_name: 'eventbus-service'
+    static_configs:
+      - targets: ['eventbus-api:8080']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    
+  - job_name: 'nats'
+    static_configs:
+      - targets: ['nats:8222']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093

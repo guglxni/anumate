@@ -1,0 +1,253 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "anumate-eventbus-service"
+version = "1.0.0"
+description = "CloudEvents event bus service for Anumate platform"
+authors = [
+    {name = "Anumate Team", email = "team@anumate.com"},
+]
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0", 
+    "pydantic>=2.5.0",
+    "nats-py>=2.6.0",
+    "aioredis>=2.0.1",
+    "asyncio-mqtt>=0.13.0",
+    "python-multipart>=0.0.6",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-dateutil>=2.8.2",
+    "structlog>=23.2.0",
+    "prometheus-client>=0.19.0",
+    "httpx>=0.25.2",
+    "tenacity>=8.2.3",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.0",
+    "sqlalchemy[asyncio]>=2.0.23"
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+keywords = ["events", "cloudevents", "nats", "microservices", "anumate"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Distributed Computing",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+    "pytest-cov>=4.1.0",
+    "black>=23.11.0",
+    "isort>=5.12.0",
+    "flake8>=6.1.0",
+    "mypy>=1.7.1",
+    "pre-commit>=3.5.0",
+    "httpx>=0.25.2",
+]
+test = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1", 
+    "pytest-cov>=4.1.0",
+    "httpx>=0.25.2",
+    "fakeredis>=2.20.0",
+    "pytest-mock>=3.12.0",
+]
+docs = [
+    "mkdocs>=1.5.3",
+    "mkdocs-material>=9.4.8",
+    "mkdocstrings[python]>=0.24.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/anumate/eventbus-service"
+Documentation = "https://anumate.github.io/eventbus-service"
+Repository = "https://github.com/anumate/eventbus-service.git"
+Issues = "https://github.com/anumate/eventbus-service/issues"
+
+[project.scripts]
+anumate-eventbus = "anumate_eventbus_service.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/anumate_eventbus_service"]
+
+[tool.hatch.envs.default]
+dependencies = [
+    "coverage[toml]",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+]
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+test-cov = "coverage run -m pytest {args:tests}"
+cov-report = [
+    "- coverage combine",
+    "coverage report",
+]
+cov-html = [
+    "- coverage combine", 
+    "coverage html",
+]
+cov = [
+    "test-cov",
+    "cov-report",
+]
+
+[[tool.hatch.envs.all.matrix]]
+python = ["3.11", "3.12"]
+
+[tool.hatch.envs.lint]
+detached = true
+dependencies = [
+    "black>=23.1.0",
+    "mypy>=1.0.0",
+    "ruff>=0.0.243",
+]
+[tool.hatch.envs.lint.scripts]
+typing = "mypy --install-types --non-interactive {args:src/anumate_eventbus_service tests}"
+style = [
+    "ruff {args:.}",
+    "black --check --diff {args:.}",
+]
+fmt = [
+    "black {args:.}",
+    "ruff --fix {args:.}",
+    "style",
+]
+all = [
+    "style",
+    "typing",
+]
+
+[tool.black]
+target-version = ["py311"]
+line-length = 120
+skip-string-normalization = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "ARG",
+    "B",
+    "C",
+    "DTZ",
+    "E",
+    "EM",
+    "F",
+    "FBT",
+    "I",
+    "ICN",
+    "ISC",
+    "N",
+    "PLC",
+    "PLE",
+    "PLR",
+    "PLW",
+    "Q",
+    "RUF",
+    "S",
+    "T",
+    "TID",
+    "UP",
+    "W",
+    "YTT",
+]
+ignore = [
+    # Allow non-abstract empty methods in abstract base classes
+    "B027",
+    # Allow boolean positional values in function calls, like `dict.get(... True)`
+    "FBT003",
+    # Ignore checks for possible passwords
+    "S105", "S106", "S107",
+    # Ignore complexity
+    "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
+]
+unfixable = [
+    # Don't touch unused imports
+    "F401",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["anumate_eventbus_service"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use magic values, assertions, and relative imports
+"tests/**/*" = ["PLR2004", "S101", "TID252"]
+
+[tool.coverage.run]
+source_pkgs = ["anumate_eventbus_service", "tests"]
+branch = true
+parallel = true
+omit = [
+    "src/anumate_eventbus_service/__about__.py",
+]
+
+[tool.coverage.paths]
+anumate_eventbus_service = ["src/anumate_eventbus_service", "*/anumate-eventbus-service/src/anumate_eventbus_service"]
+tests = ["tests", "*/anumate-eventbus-service/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "no cov",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "-ra",
+    "--cov=anumate_eventbus_service",
+    "--cov-branch",
+    "--cov-report=term-missing",
+    "--cov-fail-under=85"
+]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore:.*unclosed.*:ResourceWarning",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true

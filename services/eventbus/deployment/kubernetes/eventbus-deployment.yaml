@@ -1,0 +1,200 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventbus-service
+  namespace: anumate
+  labels:
+    app: eventbus-service
+    component: eventbus
+    tier: infrastructure
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: eventbus-service
+  template:
+    metadata:
+      labels:
+        app: eventbus-service
+        component: eventbus
+        tier: infrastructure
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+      - name: eventbus-service
+        image: anumate/eventbus-service:1.0.0
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: NATS_URL
+          value: "nats://nats.anumate.svc.cluster.local:4222"
+        - name: REDIS_URL
+          value: "redis://redis.anumate.svc.cluster.local:6379"
+        - name: STREAM_NAME
+          value: "ANUMATE_EVENTS"
+        - name: DEAD_LETTER_STREAM
+          value: "ANUMATE_DEAD_LETTERS"
+        - name: MAX_MSGS
+          value: "10000000"
+        - name: MAX_BYTES
+          value: "10737418240" # 10GB
+        - name: MAX_AGE
+          value: "2592000" # 30 days
+        envFrom:
+        - secretRef:
+            name: eventbus-config
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 10
+      terminationGracePeriodSeconds: 60
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eventbus-service
+  namespace: anumate
+  labels:
+    app: eventbus-service
+    component: eventbus
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: eventbus-service
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: eventbus-config
+  namespace: anumate
+type: Opaque
+stringData:
+  # Add any sensitive configuration here
+  NATS_TOKEN: ""
+  REDIS_PASSWORD: ""
+  
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eventbus-config
+  namespace: anumate
+data:
+  NATS_URL: "nats://nats.anumate.svc.cluster.local:4222"
+  REDIS_URL: "redis://redis.anumate.svc.cluster.local:6379"
+  STREAM_NAME: "ANUMATE_EVENTS"
+  DEAD_LETTER_STREAM: "ANUMATE_DEAD_LETTERS"
+  LOG_LEVEL: "INFO"
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: eventbus-ingress
+  namespace: anumate
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+  - hosts:
+    - eventbus.anumate.com
+    secretName: eventbus-tls
+  rules:
+  - host: eventbus.anumate.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: eventbus-service
+            port:
+              number: 8080
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: eventbus-pdb
+  namespace: anumate
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: eventbus-service
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: eventbus-hpa
+  namespace: anumate
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: eventbus-service
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
