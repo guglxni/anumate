@@ -6,16 +6,6 @@ This document describes the microservices project structure for the Anumate auto
 
 ```
 anumate/
-├── .gemini/                    # Gemini CLI configuration
-│   ├── config/                 # CLI configuration files
-│   ├── templates/              # Code generation templates
-│   ├── prompts/                # Custom prompts
-│   └── workflows/              # Automated workflows
-├── .kiro/                      # Kiro IDE configuration
-│   ├── specs/                  # Feature specifications
-│   ├── settings/               # IDE settings
-│   ├── steering/               # Steering rules
-│   └── hooks/                  # Agent hooks
 ├── .mcp/                       # Model Context Protocol config
 │   ├── servers/                # MCP server configs
 │   ├── connectors/             # Connector definitions
@@ -122,7 +112,7 @@ The `schemas/` directory contains shared data contracts:
 
 ### Development
 - **docker-compose.yml**: Local development environment with all services
-- Configuration directories for development tools (Kiro, Gemini, MCP)
+- Configuration directories for development tools (MCP)
 
 ## Architecture Principles
 
