@@ -3,27 +3,17 @@
     "filePath": "build/repomix-output.xml",
     "style": "xml"
   },
-  "include": [
-    "**/*"
-  ],
-  "ignore": [
-    ".git/**",
-    "node_modules/**",
-    "__pycache__/**",
-    "*.pyc",
-    ".pytest_cache/**",
-    ".coverage",
-    "htmlcov/**",
-    "build/dist/**",
-    "logs/**/*.log",
-    "archive/legacy-tests/**",
-    ".env",
-    ".env.local",
-    "*.pem",
-    "*.key",
-    "*.crt",
-    ".DS_Store"
-  ],
+  "include": ["**/*"],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "archive/legacy-tests/**",
+      "logs/**/*.log",
+      ".env",
+      ".env.local"
+    ]
+  },
   "security": {
     "enableSecurityCheck": true
   }
