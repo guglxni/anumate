@@ -1,7 +1,10 @@
 # Anumate Platform MVP
 
-A comprehensive microservices platform for policy automation, capability management, and secure receipt genera   - **Portia Cloud**: `ptk_LIVE_17294723472394731827431724372317...` ✅ **Real API Key**
-   - **Moonshot Kimi LLM**: `sk-E7MvG...CqjL` ✅ **Real API Key**on with tamper-evident cryptographic guarantees.
+A comprehensive microservices platform for policy automation, capability management, and secure receipt generation with tamper-evident cryptographic guarantees.
+
+## 📁 Repository Structure
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for detailed repository organization and architecture overview.
 
 ## 🏆 **JUDGE MODE - WeMakeDevs AgentHack 2025**
 

@@ -199,8 +199,8 @@ public
 tmp/
 temp/
 
-# Logs
-logs
+# Logs  
+logs/
 *.log
 
 # Runtime data
@@ -263,7 +263,8 @@ services/*/*service*.log
 test_*.py
 *_test_temp.*
 
-# Generated files
+# Build and generated files
+build/
 repomix-output.xml
 
 # Local development overrides

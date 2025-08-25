@@ -1,0 +1,30 @@
+{
+  "output": {
+    "filePath": "build/repomix-output.xml",
+    "style": "xml"
+  },
+  "include": [
+    "**/*"
+  ],
+  "ignore": [
+    ".git/**",
+    "node_modules/**",
+    "__pycache__/**",
+    "*.pyc",
+    ".pytest_cache/**",
+    ".coverage",
+    "htmlcov/**",
+    "build/dist/**",
+    "logs/**/*.log",
+    "archive/legacy-tests/**",
+    ".env",
+    ".env.local",
+    "*.pem",
+    "*.key",
+    "*.crt",
+    ".DS_Store"
+  ],
+  "security": {
+    "enableSecurityCheck": true
+  }
+}
