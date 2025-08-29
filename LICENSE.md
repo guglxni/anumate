@@ -27,7 +27,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## Governing Law
 This license shall be governed by and construed in accordance with the laws of the jurisdiction of the Owner.
 
-For commercial licensing inquiries, contact: [your email/contact info here]
+For commercial licensing inquiries, contact: @guglaniaaryan on x.com [x.com/guglaniaaryan]
 
 ---
 This license was generated on August 30, 2025. For updates or changes, refer to the official repository or contact the Owner.
